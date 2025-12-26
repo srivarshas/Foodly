@@ -140,3 +140,14 @@ button:active {
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
 }
+
+.fixed-nav {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 448px; /* Matches max-w-md */
+  z-index: 9999 !important; /* Forces it above all other cards */
+  background: white;
+}
