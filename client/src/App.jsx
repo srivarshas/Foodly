@@ -1,3 +1,16 @@
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
+import MobileNav from './components/MobileNav';
+import StudentDashboard from './pages/StudentDashboard';
+import Menu from './pages/Menu';
+import Cart from './pages/Cart';
+import OrderTracking from './pages/OrderTracking';
+import DeliveryDashboard from './pages/DeliveryDashboard';
+import Login from './pages/Login';
+import Landing from './pages/Landing';
+import BuddyStats from './pages/Stats';
+import BuddyTask from './pages/BuddyTask';
+
 function App() {
   const [role, setRole] = useState('student');
   const [user, setUser] = useState(null);
@@ -98,3 +111,5 @@ function App() {
     </Router>
   );
 }
+
+export default App;
