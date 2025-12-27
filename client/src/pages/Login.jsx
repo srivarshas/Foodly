@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export default function Login({ setRole }) {
+export default function Login({ setRole, setUser }) {
   const [email, setEmail] = useState('');
   const [selectedRole, setSelectedRole] = useState('student');
   const [error, setError] = useState('');
@@ -9,13 +9,17 @@ export default function Login({ setRole }) {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (!email.endsWith('@sastra.ac.in')) {
-      setError('Please use your @sastra.ac.in email address');
+    if (!email.endsWith('@sastra.ac.in') && !email.endsWith('@gmail.com')) {
+      setError('Please use your university or Gmail address');
       return;
     }
-    
-    // Set the global role in App.jsx and move to home
+
+    // Extract name from email (part before @)
+    const name = email.split('@')[0];
+
+    // Set the global role and user in App.jsx and move to home
     setRole(selectedRole);
+    setUser({ email, name });
     navigate('/home');
   };
 

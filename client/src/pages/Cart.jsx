@@ -9,9 +9,57 @@ const zoneDistances = {
   "CVR": 8
 };
 
-export default function Cart({ cart, setCart }) {
+export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
   const [location, setLocation] = useState("VKJ");
   const canteenName = cart.length > 0 ? cart[0].canteenName : null;
+
+  const resetCheckout = () => {
+    setCart([]);
+    setLocation("VKJ");
+  };
+
+  const handleConfirmOrder = () => {
+    
+    const orderItems = cart.map((item) => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      qty: item.qty || 1,
+      lineTotal: item.price * (item.qty || 1),
+    }));
+
+    const orderDetails = {
+      canteenName: selectedCanteen?.name || "",
+      pickupPoint: selectedCanteen?.name || "Canteen (selected in Menu)",
+      dropLocation: location,
+      items: orderItems,
+      subtotal,
+      deliveryFee: delivery,
+      totalAmount: subtotal + delivery,
+      placedby: user?.name || null,
+      pickedby: null,
+      createdAt: new Date().toISOString(),
+    };
+
+    console.log("[CONFIRM ORDER] Order details:", orderDetails);
+
+    // Persist to backend (Firestore via firebase-admin)
+    fetch("http://localhost:3000/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(orderDetails),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Failed to place order");
+        console.log("[CONFIRM ORDER] Stored in Firestore:", data);
+        resetCheckout();
+      })
+      .catch((err) => {
+        console.error("[CONFIRM ORDER] Failed:", err);
+        alert(err.message);
+      });
+  };
 
   const updateQty = (id, delta) => {
     setCart(prev => prev.map(item =>
@@ -117,6 +165,7 @@ export default function Cart({ cart, setCart }) {
         <button
 
           disabled={cart.length === 0}
+          onClick={handleConfirmOrder}
           className="w-full bg-primary text-white font-black py-4 rounded-2xl mt-6 shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
         >
           CONFIRM ORDER
