@@ -14,8 +14,11 @@ import BuddyTask from './pages/BuddyTask';
 
 
 function App() {
-  const [role, setRole] = useState('student'); 
+  const [role, setRole] = useState('student');
+  const [user, setUser] = useState(null); // { email, name }
   const [cart, setCart] = useState([]);
+  // Track selected canteen so Cart can carry it forward into the Order payload
+  const [selectedCanteen, setSelectedCanteen] = useState(null); // { id, name }
 
   return (
     <Router>
@@ -27,47 +30,50 @@ function App() {
         <Routes>
           {/* Landing and Login don't show the MobileNav */}
           <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login setRole={setRole} />} />
+          <Route path="/login" element={<Login setRole={setRole} setUser={setUser} />} />
           
           {/* Main App Routes */}
           <Route path="/home" element={
             <>
-              {role === 'student' ? <StudentDashboard /> : <DeliveryDashboard />}
+              {role === 'student' ? <StudentDashboard /> : <DeliveryDashboard user={user} />}
               <MobileNav role={role} cartCount={cart.length} />
             </>
           } />
           
           <Route path="/menu/:id" element={
             <>
-              <Menu addToCart={(item) => setCart([...cart, item])} />
+              <Menu
+                addToCart={(item) => setCart([...cart, item])}
+                setSelectedCanteen={setSelectedCanteen}
+              />
               <MobileNav role={role} cartCount={cart.length} />
             </>
           } />
 
           <Route path="/cart" element={
             <>
-              <Cart cart={cart} setCart={setCart} />
+              <Cart cart={cart} setCart={setCart} selectedCanteen={selectedCanteen} user={user} role={role} />
               <MobileNav role={role} cartCount={cart.length} />
             </>
           } />
 
           <Route path="/track" element={
             <>
-              <OrderTracking />
+              <OrderTracking user={user} role={role} />
               <MobileNav role={role} cartCount={cart.length} />
             </>
           } />
 
           <Route path="/stats" element={
             <>
-              <BuddyStats /> 
+              <BuddyStats user={user} />
               <MobileNav role={role} />
             </>
           } />
 
           <Route path="/tasks" element={
             <>
-              <BuddyTask /> 
+              <BuddyTask user={user} />
               <MobileNav role={role} />
             </>
           } />

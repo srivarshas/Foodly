@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import FoodCard from '../components/FoodCard';
+import { canteens } from '../data/canteens';
 
 const MOCK_MENU = [
   { id: 1, name: "Paneer Butter Masala", price: 120, veg: true },
@@ -7,9 +9,18 @@ const MOCK_MENU = [
   { id: 3, name: "Masala Dosa", price: 60, veg: true },
 ];
 
-export default function Menu({ addToCart }) {
+export default function Menu({ addToCart, setSelectedCanteen }) {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // Persist selected canteen in app state so Cart can include it in the order payload.
+  useEffect(() => {
+    const canteenId = Number(id);
+    const match = canteens.find((c) => Number(c.id) === canteenId);
+    if (match && typeof setSelectedCanteen === 'function') {
+      setSelectedCanteen({ id: match.id, name: match.name });
+    }
+  }, [id, setSelectedCanteen]);
 
   return (
     <div className="p-4">
@@ -19,6 +30,7 @@ export default function Menu({ addToCart }) {
 
       <div className="space-y-4">
         {MOCK_MENU.map(item => (
+         
           <FoodCard key={item.id} item={item} onAdd={() => addToCart(item)} />
         ))}
       </div>
