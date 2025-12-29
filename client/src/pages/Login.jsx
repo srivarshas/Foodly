@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Login({ setRole, setUser }) {
   const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedRole, setSelectedRole] = useState('student');
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -15,19 +14,12 @@ export default function Login({ setRole, setUser }) {
       return;
     }
 
-    // Validate phone number format
-    const phoneRegex = /^[6-9]\d{9}$/;
-    if (!phoneNumber || !phoneRegex.test(phoneNumber)) {
-      setError('Please enter a valid 10-digit phone number starting with 6-9');
-      return;
-    }
-
     // Extract name from email (part before @)
     const name = email.split('@')[0];
 
     // Set the global role and user in App.jsx and move to home
     setRole(selectedRole);
-    setUser({ email, name, phoneNumber });
+    setUser({ email, name });
     navigate('/home');
   };
 
@@ -59,31 +51,15 @@ export default function Login({ setRole, setUser }) {
 
         <div>
           <label className="text-xs font-bold text-gray-400 ml-2 uppercase">University Email</label>
-          <input
-            type="email"
-            placeholder="125XXXXXX@sastra.ac.in"
+          <input 
+            type="email" 
+            placeholder="125XXXXXX@sastra.ac.in" 
             className={`w-full mt-1 p-4 rounded-2xl bg-white border ${error ? 'border-red-500' : 'border-transparent'} shadow-sm outline-none focus:ring-2 focus:ring-primary/20`}
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
               setError('');
             }}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="text-xs font-bold text-gray-400 ml-2 uppercase">Phone Number</label>
-          <input
-            type="tel"
-            placeholder="9876543210"
-            className={`w-full mt-1 p-4 rounded-2xl bg-white border ${error ? 'border-red-500' : 'border-transparent'} shadow-sm outline-none focus:ring-2 focus:ring-primary/20`}
-            value={phoneNumber}
-            onChange={(e) => {
-              setPhoneNumber(e.target.value.replace(/\D/g, ''));
-              setError('');
-            }}
-            maxLength="10"
             required
           />
           {error && <p className="text-red-500 text-[10px] mt-2 ml-2 font-bold uppercase tracking-wider">{error}</p>}

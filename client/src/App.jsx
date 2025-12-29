@@ -11,16 +11,12 @@ import Landing from './pages/Landing';
 import BuddyStats from './pages/Stats';
 import BuddyTask from './pages/BuddyTask';
 
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
 function App() {
   const [role, setRole] = useState('student');
-  const [user, setUser] = useState(null); // { email, name }
+  const [user, setUser] = useState(null);
   const [cart, setCart] = useState([]);
-  const [selectedCanteen, setSelectedCanteen] = useState(null); // { id, name }
+  const [selectedCanteen, setSelectedCanteen] = useState(null);
 
-  // Robust addToCart logic from 'main'
   const addToCart = (newItem) => {
     setCart((prev) => {
       // 1. BLOCK: Logic check for canteen name
@@ -45,33 +41,35 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-gray-100 flex justify-center">
-        <div className="w-full max-w-md bg-white min-h-screen shadow-2xl flex flex-col relative overflow-x-hidden">
+        <div className="w-full max-w-md bg-white min-h-screen shadow-2xl flex flex-col">
           
           <div className="flex-1 pb-24">
             <Routes>
-              {/* Landing and Login don't show the MobileNav */}
+              {/* No Nav on these pages */}
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login setRole={setRole} setUser={setUser} />} />
-              
-              {/* Main App Routes */}
+
+              {/* Home Page */}
               <Route path="/home" element={
                 <>
                   {role === 'student' ? <StudentDashboard /> : <DeliveryDashboard user={user} />}
                   <MobileNav role={role} cartCount={cart.length} />
                 </>
               } />
-              
+
+              {/* Menu Page - Using the robust addToCart logic */}
               <Route path="/menu/:id" element={
                 <>
                   <Menu 
                     addToCart={addToCart} 
-                    cart={cart}
+                    cart={cart} 
                     setSelectedCanteen={setSelectedCanteen} 
                   />
                   <MobileNav role={role} cartCount={cart.length} />
                 </>
               } />
 
+              {/* Cart Page */}
               <Route path="/cart" element={
                 <>
                   <Cart 
@@ -85,6 +83,7 @@ function App() {
                 </>
               } />
 
+              {/* Other Pages */}
               <Route path="/track" element={
                 <>
                   <OrderTracking user={user} role={role} />
@@ -107,7 +106,6 @@ function App() {
               } />
             </Routes>
           </div>
-          
         </div>
       </div>
     </Router>

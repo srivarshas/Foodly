@@ -61,56 +61,6 @@ export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
       });
   };
 
-  const resetCheckout = () => {
-    setCart([]);
-    setLocation("VKJ");
-  };
-
-  const handleConfirmOrder = () => {
-    
-    const orderItems = cart.map((item) => ({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      qty: item.qty || 1,
-      lineTotal: item.price * (item.qty || 1),
-    }));
-
-    const orderDetails = {
-      canteenName: selectedCanteen?.name || "",
-      pickupPoint: selectedCanteen?.name || "Canteen (selected in Menu)",
-      dropLocation: location,
-      items: orderItems,
-      subtotal,
-      deliveryFee: delivery,
-      totalAmount: subtotal + delivery,
-      placedby: user?.name || null,
-      customerEmail: user?.email || null,
-      customerPhone: user?.phoneNumber || null,
-      pickedby: null,
-      createdAt: new Date().toISOString(),
-    };
-
-    console.log("[CONFIRM ORDER] Order details:", orderDetails);
-
-    // Persist to backend (Firestore via firebase-admin)
-    fetch("http://localhost:3000/orders", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(orderDetails),
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Failed to place order");
-        console.log("[CONFIRM ORDER] Stored in Firestore:", data);
-        resetCheckout();
-      })
-      .catch((err) => {
-        console.error("[CONFIRM ORDER] Failed:", err);
-        alert(err.message);
-      });
-  };
-
   const updateQty = (id, delta) => {
     setCart(prev => prev.map(item =>
       item.id === id ? { ...item, qty: Math.max(1, (item.qty || 1) + delta) } : item
