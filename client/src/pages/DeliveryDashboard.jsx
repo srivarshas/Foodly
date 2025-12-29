@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const OTP_STEPS = {
+  INITIAL: 'initial',
+  OTP_SENT: 'otp_sent',
+  VERIFYING: 'verifying'
+};
+
 export default function DeliveryDashboard({ user }) {
   const navigate = useNavigate();
 
@@ -14,6 +20,11 @@ export default function DeliveryDashboard({ user }) {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [otpStep, setOtpStep] = useState(OTP_STEPS.INITIAL);
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [selectedOrderForOTP, setSelectedOrderForOTP] = useState(null);
 
   useEffect(() => {
     if (user?.name) {
@@ -66,13 +77,121 @@ export default function DeliveryDashboard({ user }) {
       // Check if there's an active delivery (not delivered) accepted by this user
       const activeDelivery = orders.find(order =>
         String(order?.pickedby || '').toLowerCase() === user.name.toLowerCase() &&
-        ['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(String(order?.status || '').toUpperCase())
+        ['ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(String(order?.status || '').toUpperCase())
       );
       setActiveOrder(activeDelivery || null);
     } catch (e) {
       setError(e.message || 'Failed to load orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const startAcceptOrder = (orderId) => {
+    setSelectedOrderForOTP(orderId);
+    setOtpStep(OTP_STEPS.OTP_SENT);
+    sendAcceptanceOTP(orderId);
+  };
+
+  const sendAcceptanceOTP = async (orderId) => {
+    try {
+      setOtpLoading(true);
+      setOtpError('');
+
+      const res = await fetch(`http://localhost:3000/orders/${orderId}/start-pickup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to send OTP');
+      }
+
+      // OTP sent successfully - keep modal open for user input
+      console.log('OTP sent successfully to customer email');
+
+    } catch (e) {
+      setOtpError(e.message || 'Failed to send OTP');
+      // Don't hide modal on error - let user try resend
+      // setOtpStep(OTP_STEPS.INITIAL);
+      // setSelectedOrderForOTP(null);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const verifyAcceptanceOTP = async () => {
+    if (!selectedOrderForOTP || !otp.trim()) return;
+
+    try {
+      setOtpLoading(true);
+      setOtpError('');
+
+      const res = await fetch(`http://localhost:3000/orders/${selectedOrderForOTP}/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp: otp.trim() })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'OTP verification failed');
+      }
+
+      // OTP verified, now actually accept the order
+      await acceptOrder(selectedOrderForOTP);
+
+      // Reset OTP state
+      setOtpStep(OTP_STEPS.INITIAL);
+      setOtp('');
+      setOtpError('');
+      setSelectedOrderForOTP(null);
+
+      alert('Order accepted successfully!');
+
+    } catch (e) {
+      setOtpError(e.message || 'OTP verification failed');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const cancelOTP = () => {
+    setOtpStep(OTP_STEPS.INITIAL);
+    setOtp('');
+    setOtpError('');
+    setSelectedOrderForOTP(null);
+  };
+
+  const resendOTP = async () => {
+    if (!selectedOrderForOTP) return;
+
+    try {
+      setOtpLoading(true);
+      setOtpError('');
+
+      const res = await fetch(`http://localhost:3000/orders/${selectedOrderForOTP}/resend-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to resend OTP');
+      }
+
+      // Clear any previous errors and show success state
+      setOtpError('');
+      console.log('OTP resent successfully');
+
+    } catch (e) {
+      setOtpError(e.message || 'Failed to resend OTP');
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -87,11 +206,11 @@ export default function DeliveryDashboard({ user }) {
 
       if (!acceptRes.ok) throw new Error('Failed to accept order');
 
-      // Then update the status to PICKED_UP
+      // Then update the status to ACCEPTED (not PICKED_UP yet)
       const statusRes = await fetch(`http://localhost:3000/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'PICKED_UP' })
+        body: JSON.stringify({ status: 'ACCEPTED' })
       });
 
       if (!statusRes.ok) throw new Error('Failed to update order status');
@@ -114,13 +233,104 @@ const handleLogout = () => {
   return (
     <div className="p-4 safe-area-bottom">
 
+{/* OTP Verification Modal */}
+{otpStep === OTP_STEPS.OTP_SENT && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+    <div className="bg-white p-6 rounded-[2rem] shadow-2xl max-w-md w-full animate-scale-in">
+      <div className="text-center mb-6">
+        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span className="text-2xl">🔐</span>
+        </div>
+        <h3 className="text-xl font-black text-gray-800 mb-2">Verify Order Acceptance</h3>
+        <p className="text-sm text-gray-600">Enter the 6-digit OTP sent to the customer's email</p>
+      </div>
+
+      {/* OTP Input Boxes */}
+      <div className="flex justify-center gap-2 mb-6">
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <input
+            key={index}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength="1"
+            value={otp[index] || ''}
+            onChange={(e) => {
+              const value = e.target.value.replace(/\D/g, '');
+              const newOtp = otp.padEnd(6, ' ').split('');
+              newOtp[index] = value;
+              const updatedOtp = newOtp.join('').trimEnd();
+              setOtp(updatedOtp);
+
+              // Auto-focus next input if a digit was entered
+              if (value && index < 5) {
+                const nextInput = e.target.parentElement.children[index + 1];
+                if (nextInput) nextInput.focus();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Backspace' && index > 0) {
+                // Focus previous input on backspace if current input is empty
+                if (!otp[index]) {
+                  const prevInput = e.target.parentElement.children[index - 1];
+                  if (prevInput) prevInput.focus();
+                }
+              }
+            }}
+            className="w-12 h-12 text-center text-xl font-bold border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+            autoFocus={index === 0}
+          />
+        ))}
+      </div>
+
+      {otpError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+          <p className="text-red-600 text-sm font-bold text-center">{otpError}</p>
+        </div>
+      )}
+
+      <div className="flex gap-3 mb-3">
+        <button
+          onClick={cancelOTP}
+          className="flex-1 bg-gray-200 text-gray-800 font-bold py-3 rounded-2xl hover:bg-gray-300 transition-colors"
+          disabled={otpLoading}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={verifyAcceptanceOTP}
+          disabled={otpLoading || otp.length !== 6}
+          className="flex-1 bg-green-600 text-white font-bold py-3 rounded-2xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600 transition-all"
+        >
+          {otpLoading ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              Verifying...
+            </div>
+          ) : (
+            'Accept Order'
+          )}
+        </button>
+      </div>
+
+      <button
+        onClick={resendOTP}
+        disabled={otpLoading}
+        className="w-full bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+      >
+        {otpLoading ? 'Sending...' : '🔄 Resend OTP'}
+      </button>
+    </div>
+  </div>
+)}
+
 {/* Header Area with Logout */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-black text-gray-800 tracking-tight">Canteens</h2>
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Sastra University</p>
         </div>
-        <button 
+        <button
           onClick={handleLogout}
           className="text-[10px] font-black text-gray-400 hover:text-primary transition-all border border-gray-200 px-3 py-1.5 rounded-full flex items-center gap-1 uppercase"
         >
@@ -198,7 +408,7 @@ const handleLogout = () => {
                 </p>
               </div>
               <button
-                onClick={() => acceptOrder(order.id)}
+                onClick={() => startAcceptOrder(order.id)}
                 className="bg-gray-900 text-white px-5 py-3 rounded-2xl font-bold text-xs shadow-md hover:bg-gray-800 transition-colors"
               >
                 Accept

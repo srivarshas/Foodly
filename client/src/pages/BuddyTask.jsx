@@ -16,7 +16,7 @@ export default function BuddyTask({ user }) {
     // Poll for updates every 5 seconds for real-time feel
     const interval = setInterval(loadActiveOrder, 5000);
     return () => clearInterval(interval);
-  }, [user?.name]);
+  }, [user?.name, activeOrder?.id]);
 
   const loadActiveOrder = async () => {
     if (!user?.name) return;
@@ -31,7 +31,7 @@ export default function BuddyTask({ user }) {
       // Find order accepted by this buddy and not yet delivered
       const buddyOrder = orders.find(order =>
         String(order?.pickedby || '').toLowerCase() === user.name.toLowerCase() &&
-        !['DELIVERED', 'CANCELLED'].includes(String(order?.status || '').toUpperCase())
+        ['ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(String(order?.status || '').toUpperCase())
       );
       setActiveOrder(buddyOrder || null);
     } catch (e) {
@@ -75,6 +75,8 @@ export default function BuddyTask({ user }) {
       alert('Failed to update status: ' + e.message);
     }
   };
+
+
 
   const getCurrentStep = () => {
     if (!activeOrder) return 0;
@@ -130,6 +132,13 @@ export default function BuddyTask({ user }) {
                 </div>
               </div>
 
+              {activeOrder.customerPhone && (
+                <div className="p-4 bg-green-50 rounded-2xl">
+                  <p className="text-sm font-bold text-gray-800 mb-2">📞 Customer Phone</p>
+                  <p className="text-sm text-gray-600 font-mono">{activeOrder.customerPhone}</p>
+                </div>
+              )}
+
               <div className="p-4 bg-blue-50 rounded-2xl">
                 <p className="text-sm font-bold text-gray-800 mb-2">📍 Drop Point</p>
                 <p className="text-sm text-gray-600">{activeOrder.dropLocation}</p>
@@ -173,6 +182,7 @@ export default function BuddyTask({ user }) {
             {/* Progress Steps */}
             <div className="space-y-4">
               <p className="text-xs font-bold text-gray-400 uppercase text-center">Update Progress</p>
+
               {buddySteps.map((s) => (
                 <button
                   key={s.id}

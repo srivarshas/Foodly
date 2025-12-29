@@ -158,6 +158,13 @@ export default function OrderTracking({ user, role }) {
                   <span className="text-sm font-medium text-gray-800">{selectedOrder.placedby}</span>
                 </div>
 
+                {selectedOrder.customerPhone && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Phone:</span>
+                    <span className="text-sm font-medium text-gray-800 font-mono">{selectedOrder.customerPhone}</span>
+                  </div>
+                )}
+
                 {selectedOrder.pickedby && (
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Delivery by:</span>
