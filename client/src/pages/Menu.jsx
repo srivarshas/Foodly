@@ -3,19 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { canteenMenus } from '../data/menus';
 import { canteens } from '../data/canteens';
 import FoodCard from '../components/FoodCard';
+import { canteens } from '../data/canteens';
 
-export default function Menu({ addToCart, cart = [], setSelectedCanteen }) {
+const MOCK_MENU = [
+  { id: 1, name: "Paneer Butter Masala", price: 120, veg: true },
+  { id: 2, name: "Chicken Biryani", price: 180, veg: false },
+  { id: 3, name: "Masala Dosa", price: 60, veg: true },
+];
+
+export default function Menu({ addToCart, setSelectedCanteen }) {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Find the current canteen and its menu items
-  const canteen = canteens?.find((c) => String(c.id) === id);
-  const currentMenu = canteenMenus[id] || [];
-
-  // Logic to prevent ordering from multiple canteens
-  const isLockedToOtherCanteen = cart.length > 0 && cart[0].canteenName !== canteen?.name;
-
-  // Persist selected canteen in app state for the order payload
+  // Persist selected canteen in app state so Cart can include it in the order payload.
   useEffect(() => {
     const canteenId = Number(id);
     const match = canteens.find((c) => Number(c.id) === canteenId);
@@ -23,10 +23,6 @@ export default function Menu({ addToCart, cart = [], setSelectedCanteen }) {
       setSelectedCanteen({ id: match.id, name: match.name });
     }
   }, [id, setSelectedCanteen]);
-
-  if (!canteen) {
-    return <div className="p-10 text-center font-bold">Canteen ID {id} not found!</div>;
-  }
 
   return (
     <div className="p-4">
@@ -52,20 +48,11 @@ export default function Menu({ addToCart, cart = [], setSelectedCanteen }) {
           </div>
         )}
 
-        {/* Menu Items List */}
-        <div className="space-y-4">
-          {currentMenu.length > 0 ? (
-            currentMenu.map((item) => (
-              <FoodCard 
-                key={item.id} 
-                item={item} 
-                onAdd={() => addToCart({ ...item, canteenName: canteen.name })} 
-              />
-            ))
-          ) : (
-            <p className="text-gray-400">No items available for this canteen yet.</p>
-          )}
-        </div>
+      <div className="space-y-4">
+        {MOCK_MENU.map(item => (
+         
+          <FoodCard key={item.id} item={item} onAdd={() => addToCart(item)} />
+        ))}
       </div>
     </div>
   );
