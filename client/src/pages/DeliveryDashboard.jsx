@@ -230,8 +230,17 @@ const handleLogout = () => {
     }
   };
 
-  return (
-    <div className="p-4 safe-area-bottom">
+  const acceptOrder = async (orderId) => {
+    try {
+      // 1. Assign the Buddy to the order
+      const acceptRes = await fetch(`http://localhost:3000/orders/${orderId}/accept`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          pickedby: user?.name,
+          buddyPhone: user?.phone || "+91 99999 88888" // Attach buddy's phone for the student
+        })
+      });
 
 {/* OTP Verification Modal */}
 {otpStep === OTP_STEPS.OTP_SENT && (
@@ -327,8 +336,8 @@ const handleLogout = () => {
 {/* Header Area with Logout */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-black text-gray-800 tracking-tight">Canteens</h2>
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Sastra University</p>
+          <h2 className="text-2xl font-black text-gray-800 tracking-tight italic">Buddy Hub</h2>
+          <p className="text-[10px] text-primary font-bold uppercase tracking-widest">Active Duty: {user?.name}</p>
         </div>
         <button
           onClick={handleLogout}

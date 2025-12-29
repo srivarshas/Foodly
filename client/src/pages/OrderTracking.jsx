@@ -4,6 +4,10 @@ import OrderCard from '../components/OrderCard';
 export default function OrderTracking({ user, role }) {
   const [rating, setRating] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [orders, setOrders] = useState([]);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -82,36 +86,64 @@ export default function OrderTracking({ user, role }) {
         </>
       )}
 
-      {/* Rating Section - Shows only if Delivered */}
-      {isDelivered && !isSubmitted && (
-        <div className="mt-10 bg-orange-50 p-6 rounded-[2.5rem] border border-orange-100 text-center animate-in fade-in zoom-in duration-500">
-          <p className="font-bold text-gray-800 mb-2">How was Arjun's service?</p>
-          <div className="flex justify-center gap-2 mb-4">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                onClick={() => setRating(star)}
-                className={`text-3xl transition-transform active:scale-125 ${star <= rating ? 'grayscale-0' : 'grayscale opacity-30'}`}
-              >
-                ⭐
-              </button>
+      {/* RECENTLY DELIVERED / RATING BOX */}
+      {latestDelivered && !isSubmitted && (
+        <div className="mt-8 bg-white p-6 rounded-[2.5rem] shadow-xl border-2 border-green-100 text-center animate-in slide-in-from-bottom duration-500">
+          <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">🎉</div>
+          <p className="font-black text-gray-800">Order #{latestDelivered.id} Delivered!</p>
+          <p className="text-xs text-gray-400 mb-4 italic">Rate your experience with {latestDelivered.pickedby}</p>
+          
+          <div className="flex justify-center gap-2 mb-6">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <button key={s} onClick={() => setRating(s)} className={`text-3xl transition-all ${s <= rating ? 'scale-125' : 'grayscale opacity-20'}`}>⭐</button>
             ))}
           </div>
+          
           <button 
-            disabled={rating === 0}
             onClick={() => setIsSubmitted(true)}
-            className="bg-white px-6 py-2 rounded-full text-xs font-black text-primary shadow-sm border border-primary/10 disabled:opacity-50"
+            className="w-full bg-gray-900 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-black"
           >
-            Submit Feedback
+            Submit & Dismiss
           </button>
         </div>
       )}
 
-      {isSubmitted && (
-        <p className="mt-10 text-center text-green-600 font-bold animate-bounce text-sm">
-          Thanks for the rating! ❤️
-        </p>
-      )}
+      {/* FULL INFO MODAL */}
+      {currentSelectedOrder && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end justify-center z-[100]">
+          <div className="bg-white rounded-t-[3rem] w-full max-w-md p-8 shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-8" onClick={() => setSelectedOrderId(null)}></div>
+            
+            {/* Header */}
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h3 className="text-2xl font-black text-gray-900 leading-none">Order Status</h3>
+                <p className="text-primary font-bold text-xs mt-2 uppercase">#{currentSelectedOrder.id} • {currentSelectedOrder.canteenName}</p>
+              </div>
+              <button onClick={() => setSelectedOrderId(null)} className="bg-gray-100 w-10 h-10 rounded-full flex items-center justify-center text-gray-400">✕</button>
+            </div>
+
+            {/* Live Progress Tracker */}
+            <div className="flex justify-between items-start mb-10 relative">
+              <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-100 -z-10"></div>
+              {statusSteps.map((step, idx) => {
+                const stepIdx = statusSteps.findIndex(s => s.key === (currentSelectedOrder.status || 'PLACED'));
+                const isCurrent = (currentSelectedOrder.status || 'PLACED') === step.key;
+                const isPast = stepIdx > idx;
+
+                return (
+                  <div key={step.key} className="flex flex-col items-center gap-2 w-1/4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all ${
+                      isCurrent ? 'bg-primary text-white scale-125 ring-4 ring-primary/20' : 
+                      isPast ? 'bg-green-500 text-white' : 'bg-white text-gray-300 border border-gray-100'
+                    }`}>
+                      {isPast ? '✓' : step.icon}
+                    </div>
+                    <span className={`text-[7px] font-black uppercase text-center ${isCurrent ? 'text-primary' : 'text-gray-400'}`}>{step.label}</span>
+                  </div>
+                );
+              })}
+            </div>
 
       {/* Order Details Modal */}
       {selectedOrder && (

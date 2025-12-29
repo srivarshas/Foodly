@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { calculateDelivery } from '../utils/deliveryCharges';
 
-// Define distances for SASTRA zones
 const zoneDistances = {
   "VKJ": 10,
   "VBH": 12,
@@ -12,6 +11,55 @@ const zoneDistances = {
 
 export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
   const [location, setLocation] = useState("VKJ");
+  const canteenName = cart.length > 0 ? cart[0].canteenName : null;
+
+  const resetCheckout = () => {
+    setCart([]);
+    setLocation("VKJ");
+  };
+
+  const handleConfirmOrder = () => {
+    
+    const orderItems = cart.map((item) => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      qty: item.qty || 1,
+      lineTotal: item.price * (item.qty || 1),
+    }));
+
+    const orderDetails = {
+      canteenName: selectedCanteen?.name || "",
+      pickupPoint: selectedCanteen?.name || "Canteen (selected in Menu)",
+      dropLocation: location,
+      items: orderItems,
+      subtotal,
+      deliveryFee: delivery,
+      totalAmount: subtotal + delivery,
+      placedby: user?.name || null,
+      pickedby: null,
+      createdAt: new Date().toISOString(),
+    };
+
+    console.log("[CONFIRM ORDER] Order details:", orderDetails);
+
+    // Persist to backend (Firestore via firebase-admin)
+    fetch("http://localhost:3000/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(orderDetails),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Failed to place order");
+        console.log("[CONFIRM ORDER] Stored in Firestore:", data);
+        resetCheckout();
+      })
+      .catch((err) => {
+        console.error("[CONFIRM ORDER] Failed:", err);
+        alert(err.message);
+      });
+  };
 
   const resetCheckout = () => {
     setCart([]);
@@ -64,7 +112,7 @@ export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
   };
 
   const updateQty = (id, delta) => {
-    setCart(prev => prev.map(item => 
+    setCart(prev => prev.map(item =>
       item.id === id ? { ...item, qty: Math.max(1, (item.qty || 1) + delta) } : item
     ));
   };
@@ -74,14 +122,45 @@ export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
   };
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * (item.qty || 1)), 0);
-  
-  // Dynamic delivery calculation based on selected zone
+
   const delivery = cart.length > 0 ? calculateDelivery(zoneDistances[location] || 10, subtotal) : 0;
+
+  const handleClearCart = () => {
+    if (window.confirm("Are you sure you want to clear your tray?")) {
+      setCart([]);
+    }
+  };
 
   return (
     <div className="p-4 safe-area-bottom">
-      <h2 className="text-2xl font-black mb-6">Your Tray</h2>
-      
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-black">Your Tray</h2>
+        {cart.length > 0 && (
+          <button
+            onClick={handleClearCart}
+            className="text-[10px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-3 py-1 rounded-full"
+          >
+            Clear Tray
+          </button>
+        )}
+
+      </div>
+      {canteenName ? (
+        <div className="mb-6">
+          <div className="inline-flex items-center gap-2 bg-primary/10 px-3 py-1 rounded-full">
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest">Ordering from:</span>
+            <span className="text-sm font-bold text-gray-700">{canteenName}</span>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-2 italic font-medium">
+            * Note: You can only order from one canteen per order to ensure faster delivery.
+          </p>
+        </div>
+      ) : (
+        <div className="text-center py-10">
+          <p className="text-gray-400 italic">Your tray is empty.</p>
+        </div>
+      )}
+
       {/* Scrollable Item List */}
       <div className="space-y-3 mb-6">
         {cart.map(item => (
@@ -98,13 +177,13 @@ export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
             </div>
           </div>
         ))}
-        {cart.length === 0 && <p className="text-center text-gray-400 py-10 italic">Tray is empty...</p>}
-      </div>
+        {/*{cart.length === 0 && <p className="text-center text-gray-400 py-10 italic">Tray is empty...</p>}*/}
 
+      </div>
       {/* Location Selector */}
       <div className="mb-6 bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
         <label className="text-[10px] font-black text-gray-400 uppercase ml-1 tracking-widest">Drop Location</label>
-        <select 
+        <select
           value={location}
           onChange={(e) => setLocation(e.target.value)}
           className="w-full mt-1 bg-transparent border-none outline-none font-bold text-gray-800 text-sm"
@@ -133,8 +212,8 @@ export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
             <span>₹{subtotal + delivery}</span>
           </div>
         </div>
-        
-        <button 
+        <button
+
           disabled={cart.length === 0}
           onClick={handleConfirmOrder}
           className="w-full bg-primary text-white font-black py-4 rounded-2xl mt-6 shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
