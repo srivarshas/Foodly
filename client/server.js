@@ -1,12 +1,19 @@
+require("dotenv").config();
 const express = require("express");
-const db = require("./firebase"); // 🔗 linked to firebase.js
+const admin = require("firebase-admin"); // NEEDED FOR INCREMENT
+const db = require("./firebase"); 
+const nodemailer = require("nodemailer");
 
-// import express from "express";
-// import {db} from "./firebase"
 const app = express();
 app.use(express.json());
 
-// Basic CORS for local dev (Vite runs on 5173)
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.applicationDefault(), // or your service account
+    });
+}
+
+// Basic CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
@@ -15,150 +22,188 @@ app.use((req, res, next) => {
   next();
 });
 
-/**
- * Firestore Collections
- * - canteens: store canteen profile + operatingHours + menu[]
- * - order: store confirmed orders
- * - deliveryUsers: store delivery earnings and stats for each delivery user
- */
+// --- HELPERS ---
+function generateOTP() {
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  console.log(otp);
+  return otp;
+}
 
-// Helper to validate canteen payload
-function validateCanteenPayload(body) {
-  if (!body || typeof body !== "object") return "Body is required";
-  if (!body.name) return "name is required";
-  if (!body.location) return "location is required";
-  if (!body.contactNumber) return "contactNumber is required";
-  if (!body.operatingHours || typeof body.operatingHours !== "object") return "operatingHours is required";
-  if (!Array.isArray(body.menu)) return "menu must be an array";
-  for (const [i, item] of body.menu.entries()) {
-    if (!item.itemName) return `menu[${i}].itemName is required`;
-    if (typeof item.price !== "number") return `menu[${i}].price must be a number`;
-    if (!item.category) return `menu[${i}].category is required`;
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
-  return null;
-}
-
-// Helper to validate order payload
-function validateOrderPayload(body) {
-  if (!body || typeof body !== "object") return "Body is required";
-  if (!body.canteenName) return "canteenName is required";
-  if (!body.pickupPoint) return "pickupPoint is required";
-  if (!body.dropLocation) return "dropLocation is required";
-  if (!Array.isArray(body.items) || body.items.length === 0) return "items must be a non-empty array";
-  if (typeof body.subtotal !== "number") return "subtotal must be a number";
-  if (typeof body.deliveryFee !== "number") return "deliveryFee must be a number";
-  if (typeof body.totalAmount !== "number") return "totalAmount must be a number";
-  if (typeof body.placedby !== "number" && typeof body.placedby !== "string") return "placedby must be a number or string";
-  if (body.pickedby !== null && typeof body.pickedby !== "number" && typeof body.pickedby !== "string") return "pickedby must be null or a number or string";
-  return null;
-}
-
-// Test route
-app.get("/", (req, res) => {
-  res.send("Backend running with Firestore 🚀");
-  console.log(db.collection("order").get());
 });
 
-// Create/Upsert a canteen model in Firestore
-app.post("/canteens", async (req, res) => {
+// Send OTP email
+async function sendOTPEmail(email, otp) {
   try {
-    const err = validateCanteenPayload(req.body);
-    if (err) return res.status(400).json({ error: err });
-
-    const now = new Date().toISOString();
-    const canteenDoc = {
-      name: req.body.name,
-      location: req.body.location,
-      contactNumber: req.body.contactNumber,
-      operatingHours: {
-        mondayToFriday: req.body.operatingHours.mondayToFriday || "",
-        saturday: req.body.operatingHours.saturday || "",
-        sunday: req.body.operatingHours.sunday || "",
-      },
-      menu: req.body.menu.map((m) => ({
-        itemName: m.itemName,
-        price: m.price,
-        category: m.category,
-      })),
-      createdAt: req.body.createdAt || now,
-      updatedAt: now,
-    };
-
-    // Use provided id if present, else auto-id
-    if (req.body.id) {
-      await db.collection("canteens").doc(String(req.body.id)).set(canteenDoc, { merge: true });
-      return res.status(200).json({ id: String(req.body.id), ...canteenDoc });
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new Error('Invalid email format');
     }
 
-    const ref = await db.collection("canteens").add(canteenDoc);
-    return res.status(201).json({ id: ref.id, ...canteenDoc });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
+    // Validate OTP format
+    if (!otp || !/^\d{6}$/.test(otp)) {
+      throw new Error('Invalid OTP format');
+    }
 
-// List canteens
-app.get("/canteens", async (req, res) => {
+    const mailOptions = {
+      from: process.env.EMAIL_USER || 'foodly-delivery@foodly.com',
+      to: email,
+      subject: '🔐 Your Foodly Order Pickup OTP - Action Required',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Your Foodly OTP</title>
+        </head>
+        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+          <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #ff4545 0%, #ff9c73 100%); padding: 30px 20px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">🍕 Foodly</h1>
+              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Order Pickup Verification</p>
+            </div>
+
+            <!-- Content -->
+            <div style="padding: 30px 20px;">
+              <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 20px;">Your Delivery Agent is Here! 🚴‍♂️</h2>
+              <p style="color: #6b7280; margin: 0 0 20px 0; line-height: 1.6;">
+                Great news! Your delivery agent has arrived at the pickup location and is ready to collect your order.
+              </p>
+
+              <!-- OTP Box -->
+              <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 30px 20px; text-align: center; margin: 20px 0;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
+                  Your Verification Code
+                </div>
+                <div style="font-size: 32px; font-weight: 700; color: #0f172a; letter-spacing: 4px; margin: 10px 0;">${otp}</div>
+                <div style="font-size: 12px; color: #64748b; margin-top: 10px;">
+                  ⚡ Valid for 10 minutes
+                </div>
+              </div>
+
+              <!-- Instructions -->
+              <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                <p style="color: #92400e; margin: 0; font-size: 14px; font-weight: 500;">
+                  📞 <strong>Important:</strong> Please share this 6-digit code with your delivery agent to confirm pickup.
+                </p>
+              </div>
+
+              <!-- Footer -->
+              <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
+                <p style="color: #9ca3af; font-size: 12px; margin: 0; text-align: center; line-height: 1.5;">
+                  This is an automated message from Foodly.<br>
+                  If you didn't request this pickup, please ignore this email.
+                </p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ OTP email sent successfully to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Email sending failed:', error.message);
+    return false;
+  }
+}
+
+
+// --- ROUTES ---
+
+// 1. GET Wallet Balance
+app.get("/wallet/:userId", async (req, res) => {
   try {
-    const snapshot = await db.collection("canteens").get();
-    if (snapshot.empty) return res.status(200).json([]);
-
-    const canteens = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    res.status(200).json(canteens);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    const { userId } = req.params;
+    // Use doc(String(userId)) to ensure the ID is a string
+    const doc = await db.collection("wallets").doc(String(userId)).get();
+    
+    if (!doc.exists) {
+      // Create a default wallet if it doesn't exist
+      const initialWallet = { balance: 500, history: [] }; 
+      await db.collection("wallets").doc(String(userId)).set(initialWallet);
+      return res.json(initialWallet);
+    }
+    res.json(doc.data());
+  } catch (e) { 
+    console.error("Wallet Fetch Error:", e); // Check your terminal for this log
+    res.status(500).json({ error: e.message }); 
   }
 });
 
-// Confirm an order (write to Firestore)
+// 2. Place Order (Generates OTP immediately)
+// Updated Route in server.js
 app.post("/orders", async (req, res) => {
   try {
-    const err = validateOrderPayload(req.body);
-    if (err) return res.status(400).json({ error: err });
+    const { totalAmount, placedby } = req.body; // Ensure these are sent from frontend
+    const otp = generateOTP();
+    const now = new Date().toISOString();
+    
+    const batch = db.batch();
+
+    // 1. Create the Order Document
+    const orderRef = db.collection("order").doc(); 
+    const orderDoc = {
+      ...req.body,
+      otp: otp,
+      status: "PLACED",
+      createdAt: now,
+      updatedAt: now
+    };
+    batch.set(orderRef, orderDoc);
+
+    // 2. Deduct from Student Wallet immediately
+    const studentWalletRef = db.collection("wallets").doc(String(placedby));
+    batch.set(studentWalletRef, {
+      balance: admin.firestore.FieldValue.increment(-totalAmount),
+      history: admin.firestore.FieldValue.arrayUnion({
+        type: 'order',
+        amount: totalAmount,
+        orderId: orderRef.id,
+        date: now
+      })
+    }, { merge: true });
+
+    // Execute both actions together
+    await batch.commit();
+
+    res.status(201).json({ id: orderRef.id, ...orderDoc });
+  } catch (error) { 
+    console.error("Order Placement Error:", error);
+    res.status(500).json({ error: error.message }); 
+  }
+});
+
+// Accept order (set pickedby and buddyPhone)
+app.patch("/orders/:id/accept", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { pickedby, buddyPhone } = req.body; // Extract buddyPhone from request
 
     const now = new Date().toISOString();
-    const orderDoc = {
-      canteenName: req.body.canteenName,
-      pickupPoint: req.body.pickupPoint,
-      dropLocation: req.body.dropLocation,
-      items: req.body.items,
-      subtotal: req.body.subtotal,
-      deliveryFee: req.body.deliveryFee,
-      totalAmount: req.body.totalAmount,
-      placedby: parseInt(req.body.placedby) || req.body.placedby,
-      pickedby: req.body.pickedby === null ? null : (parseInt(req.body.pickedby) || req.body.pickedby),
-      status: req.body.status || "PLACED",
-      createdAt: req.body.createdAt || now,
-      updatedAt: now,
+    
+    // Create the update object
+    const updateData = {
+      pickedby: pickedby,
+      buddyPhone: buddyPhone || "", // Store the phone number
+      updatedAt: now
     };
 
-    const ref = await db.collection("order").add(orderDoc);
-    res.status(201).json({ id: ref.id, ...orderDoc });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
-app.get("/orders", async (req, res) => {
-  try {
-    const snapshot = await db.collection("order").get();
+    await db.collection("order").doc(id).update(updateData);
 
-    // If collection is empty
-    if (snapshot.empty) {
-      return res.status(200).json([]);
-    }
-
-    const orders = snapshot.docs.map(doc => ({
-      id: doc.id,       // document ID
-      ...doc.data(),    // document fields
-    }));
-
-    res.status(200).json(orders);
+    const updatedDoc = await db.collection("order").doc(id).get();
+    res.status(200).json({ id: updatedDoc.id, ...updatedDoc.data() });
 
   } catch (error) {
     console.error(error);
@@ -166,154 +211,74 @@ app.get("/orders", async (req, res) => {
   }
 });
 
-// Update order status
+// 3. Update Status (Sends email if moving to OUT_FOR_DELIVERY)
 app.patch("/orders/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const orderRef = db.collection("order").doc(id);
+    const doc = await orderRef.get();
+    
+    if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+    const orderData = doc.data();
 
-    if (!status) {
-      return res.status(400).json({ error: "Status is required" });
+    if (status === "OUT_FOR_DELIVERY" && orderData.customerEmail) {
+      await sendOTPEmail(orderData.customerEmail, orderData.otp);
     }
 
-    const now = new Date().toISOString();
-    await db.collection("order").doc(id).update({
-      status: status.toUpperCase(),
-      updatedAt: now
-    });
-
-    // Get updated order
-    const updatedDoc = await db.collection("order").doc(id).get();
-    if (!updatedDoc.exists) {
-      return res.status(404).json({ error: "Order not found" });
-    }
-
-    res.status(200).json({
-      id: updatedDoc.id,
-      ...updatedDoc.data()
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
+    await orderRef.update({ status, updatedAt: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Accept order (set pickedby)
-app.patch("/orders/:id/accept", async (req, res) => {
+// 4. VERIFY OTP & TRANSFER MONEY (THE MAIN WALLET LOGIC)
+app.post("/orders/:id/verify-otp", async (req, res) => {
   try {
     const { id } = req.params;
-    const { pickedby } = req.body;
+    const { otp, buddyId } = req.body;
 
-    const now = new Date().toISOString();
-    await db.collection("order").doc(id).update({
-      pickedby: parseInt(pickedby) || pickedby,
-      updatedAt: now
-    });
+    const orderRef = db.collection("order").doc(id);
+    const orderSnap = await orderRef.get();
+    const order = orderSnap.data();
 
-    // Get updated order
-    const updatedDoc = await db.collection("order").doc(id).get();
-    if (!updatedDoc.exists) {
-      return res.status(404).json({ error: "Order not found" });
-    }
+    if (order.otp !== otp) return res.status(400).json({ error: "Invalid OTP" });
 
-    res.status(200).json({
-      id: updatedDoc.id,
-      ...updatedDoc.data()
-    });
+    const batch = db.batch();
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
+    // Deduct from Student
+    const studentRef = db.collection("wallets").doc(String(order.placedby));
+    batch.set(studentRef, {
+      balance: admin.firestore.FieldValue.increment(-order.totalAmount),
+      history: admin.firestore.FieldValue.arrayUnion({
+        type: 'order', amount: order.totalAmount, date: new Date().toISOString()
+      })
+    }, { merge: true });
+
+    // Pay the Buddy
+    const buddyRef = db.collection("deliveryUsers").doc(String(buddyId));
+    batch.set(buddyRef, {
+      totalEarnings: admin.firestore.FieldValue.increment(order.deliveryFee),
+      deliveryCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    // Finalize Order
+    batch.update(orderRef, { status: 'DELIVERED', updatedAt: new Date().toISOString() });
+
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Get delivery user stats
+// 5. Standard Get Routes
+app.get("/orders", async (req, res) => {
+  const snapshot = await db.collection("order").get();
+  res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+});
+
 app.get("/delivery-users/:userId", async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const doc = await db.collection("deliveryUsers").doc(userId).get();
-    if (!doc.exists) {
-      // Return default stats if user doesn't exist yet
-      return res.status(200).json({
-        userId,
-        totalEarnings: 0,
-        deliveryCount: 0,
-        deliveries: [],
-        rating: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-    }
-
-    res.status(200).json({
-      id: doc.id,
-      ...doc.data()
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
+  const doc = await db.collection("deliveryUsers").doc(req.params.userId).get();
+  res.json(doc.exists ? doc.data() : { totalEarnings: 0, deliveryCount: 0 });
 });
 
-// Update delivery earnings when order is completed
-app.post("/delivery-users/:userId/earn", async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { amount, orderId } = req.body;
-
-    if (typeof amount !== "number" || amount <= 0) {
-      return res.status(400).json({ error: "Valid amount is required" });
-    }
-
-    const now = new Date().toISOString();
-    const docRef = db.collection("deliveryUsers").doc(userId);
-
-    // Get current data or create new
-    const doc = await docRef.get();
-    let currentData;
-
-    if (!doc.exists) {
-      currentData = {
-        userId,
-        totalEarnings: 0,
-        deliveryCount: 0,
-        deliveries: [],
-        rating: 4.9, // Default rating
-        createdAt: now,
-        updatedAt: now
-      };
-    } else {
-      currentData = doc.data();
-    }
-
-    // Update earnings and delivery count
-    const newDelivery = {
-      amount,
-      orderId,
-      timestamp: now,
-      date: new Date().toISOString().split('T')[0] // YYYY-MM-DD format
-    };
-
-    const updatedData = {
-      ...currentData,
-      totalEarnings: currentData.totalEarnings + amount,
-      deliveryCount: currentData.deliveryCount + 1,
-      deliveries: [...(currentData.deliveries || []), newDelivery],
-      updatedAt: now
-    };
-
-    await docRef.set(updatedData);
-
-    res.status(200).json(updatedData);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
-});
+app.listen(3000, () => console.log("Server running on port 3000"));

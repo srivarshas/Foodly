@@ -39,18 +39,15 @@ export default function OrderTracking({ user }) {
     );
   }, [orders, user?.name]);
 
-  // FIND THE LATEST DELIVERED ORDER (to prevent random green boxes from old history)
   const latestDelivered = useMemo(() => {
     if (!user?.name) return null;
     const delivered = orders.filter((o) => 
       String(o?.placedby || '').toLowerCase() === String(user.name).toLowerCase() &&
       String(o?.status || '').toUpperCase() === 'DELIVERED'
     );
-    // Sort by ID or Date to get the very last one
     return delivered.sort((a, b) => b.id - a.id)[0] || null;
   }, [orders, user?.name]);
 
-  // SYNC MODAL WITH LIVE DATA
   const currentSelectedOrder = useMemo(() => {
     return orders.find(o => o.id === selectedOrderId);
   }, [orders, selectedOrderId]);
@@ -88,25 +85,18 @@ export default function OrderTracking({ user }) {
         )}
       </div>
 
-      {/* RECENTLY DELIVERED / RATING BOX */}
+      {/* RATING BOX */}
       {latestDelivered && !isSubmitted && (
         <div className="mt-8 bg-white p-6 rounded-[2.5rem] shadow-xl border-2 border-green-100 text-center animate-in slide-in-from-bottom duration-500">
           <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">🎉</div>
           <p className="font-black text-gray-800">Order #{latestDelivered.id} Delivered!</p>
           <p className="text-xs text-gray-400 mb-4 italic">Rate your experience with {latestDelivered.pickedby}</p>
-          
           <div className="flex justify-center gap-2 mb-6">
             {[1, 2, 3, 4, 5].map((s) => (
               <button key={s} onClick={() => setRating(s)} className={`text-3xl transition-all ${s <= rating ? 'scale-125' : 'grayscale opacity-20'}`}>⭐</button>
             ))}
           </div>
-          
-          <button 
-            onClick={() => setIsSubmitted(true)}
-            className="w-full bg-gray-900 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest active:bg-black"
-          >
-            Submit & Dismiss
-          </button>
+          <button onClick={() => setIsSubmitted(true)} className="w-full bg-gray-900 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest">Submit & Dismiss</button>
         </div>
       )}
 
@@ -116,7 +106,6 @@ export default function OrderTracking({ user }) {
           <div className="bg-white rounded-t-[3rem] w-full max-w-md p-8 shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] overflow-y-auto">
             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-8" onClick={() => setSelectedOrderId(null)}></div>
             
-            {/* Header */}
             <div className="flex justify-between items-start mb-8">
               <div>
                 <h3 className="text-2xl font-black text-gray-900 leading-none">Order Status</h3>
@@ -125,8 +114,19 @@ export default function OrderTracking({ user }) {
               <button onClick={() => setSelectedOrderId(null)} className="bg-gray-100 w-10 h-10 rounded-full flex items-center justify-center text-gray-400">✕</button>
             </div>
 
-            {/* Live Progress Tracker */}
-            <div className="flex justify-between items-start mb-10 relative">
+            {/* LIVE OTP DISPLAY SECTION */}
+            {/* Find this section in OrderTracking.jsx around line 100 */}
+{/* Change the status check to include 'PICKED_UP' or just check if it exists */}
+{currentSelectedOrder.otp && (
+    <div className="mb-8 bg-primary rounded-[2rem] p-6 text-white text-center shadow-lg shadow-primary/30 border-4 border-white">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 opacity-80">Share this code for Handover</p>
+        <h4 className="text-4xl font-black tracking-[0.4em] ml-3">{currentSelectedOrder.otp || "------"}</h4>
+        <p className="text-[9px] mt-3 font-medium bg-white/20 inline-block px-3 py-1 rounded-full">Only give this to {currentSelectedOrder.pickedby} when you get your food</p>
+    </div>
+)}
+
+            {/* Progress Tracker */}
+            <div className="flex justify-between items-start mb-10 relative px-2">
               <div className="absolute top-4 left-0 w-full h-0.5 bg-gray-100 -z-10"></div>
               {statusSteps.map((step, idx) => {
                 const stepIdx = statusSteps.findIndex(s => s.key === (currentSelectedOrder.status || 'PLACED'));
@@ -147,7 +147,6 @@ export default function OrderTracking({ user }) {
               })}
             </div>
 
-            {/* Detailed Order Info Box */}
             <div className="space-y-6">
               {/* Buddy Details */}
               <div className="bg-gray-900 rounded-[2rem] p-5 text-white flex justify-between items-center shadow-lg">
@@ -160,9 +159,12 @@ export default function OrderTracking({ user }) {
                 )}
               </div>
 
-              {/* Itemized Bill */}
+              {/* Itemized Bill with Option A Status */}
               <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100">
-                <p className="text-[10px] font-black text-gray-400 uppercase mb-4 tracking-widest">Your Items</p>
+                <div className="flex justify-between items-center mb-4">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Items</p>
+                    <span className="text-[8px] font-black text-green-600 bg-green-100 px-2 py-0.5 rounded-full uppercase">Paid via Wallet</span>
+                </div>
                 <div className="space-y-3">
                   {currentSelectedOrder.items?.map((item, i) => (
                     <div key={i} className="flex justify-between items-center text-sm">
@@ -172,7 +174,7 @@ export default function OrderTracking({ user }) {
                   ))}
                   <div className="border-t border-dashed border-gray-200 pt-3 mt-3 space-y-2">
                     <div className="flex justify-between text-xs text-gray-400 font-bold uppercase">
-                      <span>Delivery Fee</span>
+                      <span>Delivery Fee (Escrow)</span>
                       <span>₹{currentSelectedOrder.deliveryFee}</span>
                     </div>
                     <div className="flex justify-between text-lg font-black text-gray-900 pt-1">
@@ -183,7 +185,7 @@ export default function OrderTracking({ user }) {
                 </div>
               </div>
 
-              {/* Drop-off Info */}
+              {/* Drop-off Point */}
               <div className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
                 <div className="text-2xl">📍</div>
                 <div>

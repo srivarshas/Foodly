@@ -1,10 +1,16 @@
-// src/pages/BuddyTask.jsx
 import { useState, useEffect } from 'react';
 
 export default function BuddyTask({ user }) {
   const [activeOrders, setActiveOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // OTP States
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
 
   const buddySteps = [
     { id: 1, label: "Confirm Pickup", icon: "🍱", status: 'PICKED_UP' },
@@ -14,22 +20,18 @@ export default function BuddyTask({ user }) {
 
   useEffect(() => {
     loadActiveOrders();
-    // Poll for updates every 5 seconds for real-time feel
     const interval = setInterval(loadActiveOrders, 5000);
     return () => clearInterval(interval);
   }, [user?.name]);
 
   const loadActiveOrders = async () => {
     if (!user?.name) return;
-
     try {
       const res = await fetch('http://localhost:3000/orders');
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load orders');
-
-      const orders = Array.isArray(data) ? data : (data ? Object.values(data) : []);
+      const orders = Array.isArray(data) ? data : Object.values(data || {});
       
-      // Filter orders accepted by this buddy and not yet delivered
       const myActiveTasks = orders.filter(order =>
         String(order?.pickedby || '').toLowerCase() === user.name.toLowerCase() &&
         !['DELIVERED', 'CANCELLED'].includes(String(order?.status || '').toUpperCase())
@@ -38,9 +40,20 @@ export default function BuddyTask({ user }) {
       setActiveOrders(myActiveTasks);
       setError('');
     } catch (e) {
-      setError(e.message || 'Failed to load orders');
+      setError(e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // STEP 1: Handle Normal Status Updates (Pickup & En-Route)
+  const handleStepClick = (orderId, stepStatus, deliveryFee, stepId) => {
+    if (stepStatus === 'DELIVERED') {
+      // For the final step, open the OTP Modal instead of updating immediately
+      setSelectedOrderId(orderId);
+      setShowOtpModal(true);
+    } else {
+      updateOrderStatus(orderId, stepStatus, deliveryFee);
     }
   };
 
@@ -52,9 +65,9 @@ export default function BuddyTask({ user }) {
         body: JSON.stringify({ status: newStatus })
       });
 
-      if (!res.ok) throw new Error('Failed to update order status');
+      if (!res.ok) throw new Error('Failed to update status');
 
-      // If order is marked as delivered, add delivery fee to user's earnings
+      // OPTION A: Release Payments only if status is DELIVERED
       if (newStatus === 'DELIVERED') {
         const earnRes = await fetch(`http://localhost:3000/delivery-users/${user.name}/earn`, {
           method: 'POST',
@@ -64,15 +77,40 @@ export default function BuddyTask({ user }) {
             orderId: orderId
           })
         });
-
         if (!earnRes.ok) console.error('Earnings update failed');
       }
 
-      // Local update for immediate feedback
-      setActiveOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
       await loadActiveOrders();
     } catch (e) {
-      alert('Status update failed: ' + e.message);
+      alert(e.message);
+    }
+  };
+
+  // STEP 2: Verify OTP for Final Handover
+  const verifyHandoverOTP = async () => {
+    setOtpLoading(true);
+    setOtpError('');
+    try {
+      const res = await fetch(`http://localhost:3000/orders/${selectedOrderId}/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp: otp.trim() })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Invalid OTP');
+
+      // Correct OTP! Now complete the order and trigger payment
+      const order = activeOrders.find(o => o.id === selectedOrderId);
+      await updateOrderStatus(selectedOrderId, 'DELIVERED', order.deliveryFee);
+      
+      setShowOtpModal(false);
+      setOtp('');
+      alert("Verification Successful! Earnings added to wallet.");
+    } catch (e) {
+      setOtpError(e.message);
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -86,93 +124,138 @@ export default function BuddyTask({ user }) {
 
   return (
     <div className="p-4 pb-24 min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-black text-gray-800 tracking-tight">Active Tasks</h2>
-        <div className="flex justify-between items-center mt-1">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Multiple Order Handling</p>
-          <span className="bg-primary text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-            {activeOrders.length} ORDERS
-          </span>
-        </div>
+        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Verification Required for Handover</p>
       </div>
 
-      {loading && activeOrders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 italic text-gray-400">
-          <div className="animate-spin mb-4 text-2xl">🔄</div>
-          <p>Fetching your tasks...</p>
-        </div>
-      ) : error ? (
-        <p className="text-center text-red-600 py-10 font-bold">{error}</p>
-      ) : activeOrders.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-gray-200">
-           <p className="text-gray-400 italic">No orders currently assigned to you.</p>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {activeOrders.map((order) => {
-            const currentStep = getStepIndex(order.status);
+      {activeOrders.map((order) => {
+        const currentStep = getStepIndex(order.status);
+        return (
+          <div key={order.id} className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-gray-100 mb-6">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-xl font-black text-gray-800">Order #{order.id}</h2>
+              <p className="text-lg font-black text-green-600">₹{order.deliveryFee}</p>
+            </div>
 
-            return (
-              <div key={order.id} className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-gray-100 relative">
-                {/* Order ID and Earnings */}
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <span className="bg-primary/10 text-primary text-[10px] font-black px-2 py-1 rounded-md uppercase">
-                       {order.canteenName}
+            <div className="space-y-3">
+              {buddySteps.map((step) => {
+                const isCompleted = currentStep >= step.id;
+                const isNext = currentStep === step.id - 1;
+
+                return (
+                  <button
+                    key={step.id}
+                    disabled={!isNext}
+                    onClick={() => handleStepClick(order.id, step.status, order.deliveryFee, step.id)}
+                    className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all ${
+                      isCompleted ? "bg-green-50 text-green-600 opacity-60" :
+                      isNext ? "bg-gray-900 text-white shadow-lg" : "bg-gray-50 text-gray-300"
+                    }`}
+                  >
+                    <span className="font-bold text-xs flex items-center gap-2">
+                      <span className="text-lg">{step.icon}</span> {step.label}
                     </span>
-                    <h2 className="text-xl font-black mt-1">Order #{order.id}</h2>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase">Fee</p>
-                    <p className="text-lg font-black text-green-600">₹{order.deliveryFee}</p>
-                  </div>
-                </div>
+                    {isCompleted && <span>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
 
-                {/* Logistics Info */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                   <div className="bg-gray-50 p-3 rounded-2xl">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase">Drop Point</p>
-                      <p className="text-xs font-bold text-gray-800 truncate">{order.dropLocation}</p>
-                   </div>
-                   <div className="bg-gray-50 p-3 rounded-2xl">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase">Student</p>
-                      <p className="text-xs font-bold text-gray-800">{order.placedby}</p>
-                   </div>
-                </div>
+      {/* OTP MODAL (Handover Verification) */}
+{showOtpModal && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+    <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl max-w-md w-full animate-in zoom-in duration-300">
+      
+      {/* Header */}
+      <div className="text-center mb-6">
+        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span className="text-2xl">🤝</span>
+        </div>
+        <h3 className="text-xl font-black text-gray-800 mb-1">Confirm Handover</h3>
+        <p className="text-sm text-gray-500 font-medium">
+          Enter the 6-digit code shown on the student's screen
+        </p>
+      </div>
 
-                {/* Progress Steps for this specific order */}
-                <div className="space-y-3">
-                  {buddySteps.map((step) => {
-                    const isCompleted = currentStep >= step.id;
-                    const isNext = currentStep === step.id - 1;
+      {/* 6-Box OTP Input */}
+      <div className="flex justify-center gap-2 mb-6">
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <input
+            key={index}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength="1"
+            value={otp[index] || ''}
+            onChange={(e) => {
+              const value = e.target.value.replace(/\D/g, '');
+              const newOtp = otp.padEnd(6, ' ').split('');
+              newOtp[index] = value;
+              const updatedOtp = newOtp.join('').trimEnd();
+              setOtp(updatedOtp);
 
-                    return (
-                      <button
-                        key={step.id}
-                        disabled={!isNext}
-                        onClick={() => updateOrderStatus(order.id, step.status, order.deliveryFee)}
-                        className={`w-full p-4 rounded-2xl flex items-center justify-between transition-all ${
-                          isCompleted
-                            ? "bg-green-50 text-green-600 opacity-60 scale-95"
-                            : isNext
-                            ? "bg-gray-900 text-white shadow-lg active:scale-95"
-                            : "bg-gray-50 text-gray-300"
-                        }`}
-                      >
-                        <span className="font-bold text-xs flex items-center gap-2">
-                           <span className="text-lg">{step.icon}</span> {step.label}
-                        </span>
-                        {isCompleted && <span className="text-green-500 font-black">✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+              // Auto-focus next box
+              if (value && index < 5) {
+                const nextInput = e.target.parentElement.children[index + 1];
+                if (nextInput) nextInput.focus();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Backspace' && index > 0 && !otp[index]) {
+                const prevInput = e.target.parentElement.children[index - 1];
+                if (prevInput) prevInput.focus();
+              }
+            }}
+            className="w-11 h-14 text-center text-xl font-black border-2 border-gray-100 rounded-xl focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none"
+            autoFocus={index === 0}
+          />
+        ))}
+      </div>
+
+      {/* Error Message */}
+      {otpError && (
+        <div className="bg-red-50 border border-red-100 rounded-xl p-3 mb-4">
+          <p className="text-red-600 text-[10px] font-black text-center uppercase tracking-widest">
+            {otpError}
+          </p>
         </div>
       )}
+
+      {/* Action Buttons */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => {
+            setShowOtpModal(false);
+            setOtp('');
+            setOtpError('');
+          }}
+          className="flex-1 bg-gray-100 text-gray-500 font-black py-4 rounded-2xl text-xs uppercase tracking-widest active:scale-95 transition-all"
+          disabled={otpLoading}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={verifyHandoverOTP}
+          disabled={otpLoading || otp.length !== 6}
+          className="flex-1 bg-primary text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-primary/20 active:scale-95 disabled:opacity-50 transition-all"
+        >
+          {otpLoading ? (
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Checking...</span>
+            </div>
+          ) : (
+            'Complete'
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

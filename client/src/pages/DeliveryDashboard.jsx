@@ -77,6 +77,11 @@ export default function DeliveryDashboard({ user }) {
   };
 
   const acceptOrder = async (orderId) => {
+    if (!user || !user.name) {
+      alert("Buddy profile not loaded. Please log in again.");
+      return;
+    }
+
     try {
       // 1. Assign the Buddy to the order
       const acceptRes = await fetch(`http://localhost:3000/orders/${orderId}/accept`, {
@@ -121,25 +126,30 @@ export default function DeliveryDashboard({ user }) {
         <button onClick={handleLogout} className="p-2 px-4 bg-white border border-gray-200 rounded-full text-[10px] font-black uppercase text-gray-400">Logout</button>
       </div>
 
-      {/* Earnings Overview */}
-      <div className="bg-gray-900 rounded-[2.5rem] p-8 text-white mb-8 shadow-xl">
-        <p className="opacity-50 text-[10px] font-black uppercase tracking-widest">Wallet Balance</p>
-        <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold text-primary">₹</span>
-          <h3 className="text-4xl font-black">{balance.toFixed(2)}</h3>
-        </div>
-        
-        <div className="flex gap-4 mt-8">
-          <div className="flex-1 bg-white/5 p-4 rounded-3xl border border-white/10">
-            <p className="text-[9px] opacity-40 font-bold uppercase">Runs</p>
-            <p className="text-xl font-black">{deliveryStats.deliveryCount}</p>
-          </div>
-          <div className="flex-1 bg-white/5 p-4 rounded-3xl border border-white/10">
-            <p className="text-[9px] opacity-40 font-bold uppercase">Rating</p>
-            <p className="text-xl font-black text-yellow-400">{deliveryStats.rating} ★</p>
-          </div>
-        </div>
-      </div>
+      {/* Buddy Earnings Card */}
+<div className="bg-primary rounded-[2.5rem] p-6 text-white shadow-xl shadow-primary/20 mb-8">
+  <div className="flex justify-between items-start mb-4">
+    <div>
+      <p className="text-[10px] font-black uppercase opacity-80 tracking-widest">Total Earnings</p>
+      <h2 className="text-4xl font-black">₹{deliveryStats.totalEarnings}</h2>
+    </div>
+    <div className="bg-black/20 p-3 rounded-2xl text-center min-w-[60px]">
+      <p className="text-[18px] font-black">{deliveryStats.rating}</p>
+      <p className="text-[8px] font-bold uppercase opacity-60">Rating</p>
+    </div>
+  </div>
+  
+  <div className="grid grid-cols-2 gap-3 mt-6">
+    <div className="bg-white/10 rounded-2xl p-3">
+      <p className="text-[8px] font-bold uppercase opacity-60 mb-1">Deliveries</p>
+      <p className="font-black">{deliveryStats.deliveryCount}</p>
+    </div>
+    <div className="bg-white/10 rounded-2xl p-3">
+      <p className="text-[8px] font-bold uppercase opacity-60 mb-1">Status</p>
+      <p className="font-black text-green-300">Active</p>
+    </div>
+  </div>
+</div>
 
       {/* Active Order Banner */}
       {activeOrder ? (

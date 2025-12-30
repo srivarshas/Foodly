@@ -52,7 +52,7 @@ function App() {
               {/* Home Page */}
               <Route path="/home" element={
                 <>
-                  {role === 'student' ? <StudentDashboard /> : <DeliveryDashboard user={user} />}
+                  {role === 'student' ? <StudentDashboard user={user} /> : <DeliveryDashboard user={user} />}
                   <MobileNav role={role} cartCount={cart.length} />
                 </>
               } />
