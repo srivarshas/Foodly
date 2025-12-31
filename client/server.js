@@ -23,10 +23,28 @@ app.use((req, res, next) => {
 });
 
 // --- HELPERS ---
+
+// Simple in-memory rate limiting (in production, use Redis or similar)
+const rateLimitMap = new Map();
+
+function checkRateLimit(key, maxRequests = 3, windowMs = 15 * 60 * 1000) { // 3 requests per 15 minutes
+  const now = Date.now();
+  const userRequests = rateLimitMap.get(key) || [];
+
+  // Filter out old requests outside the window
+  const validRequests = userRequests.filter(timestamp => now - timestamp < windowMs);
+
+  if (validRequests.length >= maxRequests) {
+    return false; // Rate limit exceeded
+  }
+
+  validRequests.push(now);
+  rateLimitMap.set(key, validRequests);
+  return true;
+}
+
 function generateOTP() {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  console.log(otp);
-  return otp;
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 const transporter = nodemailer.createTransport({
@@ -37,86 +55,100 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Send OTP email
-async function sendOTPEmail(email, otp) {
-  try {
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      throw new Error('Invalid email format');
-    }
-
-    // Validate OTP format
-    if (!otp || !/^\d{6}$/.test(otp)) {
-      throw new Error('Invalid OTP format');
-    }
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER || 'foodly-delivery@foodly.com',
-      to: email,
-      subject: '🔐 Your Foodly Order Pickup OTP - Action Required',
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Your Foodly OTP</title>
-        </head>
-        <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
-          <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-            <!-- Header -->
-            <div style="background: linear-gradient(135deg, #ff4545 0%, #ff9c73 100%); padding: 30px 20px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">🍕 Foodly</h1>
-              <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Order Pickup Verification</p>
-            </div>
-
-            <!-- Content -->
-            <div style="padding: 30px 20px;">
-              <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 20px;">Your Delivery Agent is Here! 🚴‍♂️</h2>
-              <p style="color: #6b7280; margin: 0 0 20px 0; line-height: 1.6;">
-                Great news! Your delivery agent has arrived at the pickup location and is ready to collect your order.
-              </p>
-
-              <!-- OTP Box -->
-              <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 30px 20px; text-align: center; margin: 20px 0;">
-                <div style="font-size: 12px; color: #64748b; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
-                  Your Verification Code
-                </div>
-                <div style="font-size: 32px; font-weight: 700; color: #0f172a; letter-spacing: 4px; margin: 10px 0;">${otp}</div>
-                <div style="font-size: 12px; color: #64748b; margin-top: 10px;">
-                  ⚡ Valid for 10 minutes
-                </div>
-              </div>
-
-              <!-- Instructions -->
-              <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
-                <p style="color: #92400e; margin: 0; font-size: 14px; font-weight: 500;">
-                  📞 <strong>Important:</strong> Please share this 6-digit code with your delivery agent to confirm pickup.
-                </p>
-              </div>
-
-              <!-- Footer -->
-              <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
-                <p style="color: #9ca3af; font-size: 12px; margin: 0; text-align: center; line-height: 1.5;">
-                  This is an automated message from Foodly.<br>
-                  If you didn't request this pickup, please ignore this email.
-                </p>
-              </div>
-            </div>
-          </div>
-        </body>
-        </html>
-      `
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ OTP email sent successfully to ${email}`);
-    return true;
-  } catch (error) {
-    console.error('❌ Email sending failed:', error.message);
+// Send OTP email with retry mechanism
+async function sendOTPEmail(email, otp, maxRetries = 3) {
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    console.error('Invalid email format:', email);
     return false;
   }
+
+  // Validate OTP format
+  if (!otp || !/^\d{6}$/.test(otp)) {
+    console.error('Invalid OTP format:', otp);
+    return false;
+  }
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER || 'foodly-delivery@foodly.com',
+    to: email,
+    subject: '🔐 Your Foodly Order Pickup OTP - Action Required',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your Foodly OTP</title>
+      </head>
+      <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #ff4545 0%, #ff9c73 100%); padding: 30px 20px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">🍕 Foodly</h1>
+            <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Order Pickup Verification</p>
+          </div>
+
+          <!-- Content -->
+          <div style="padding: 30px 20px;">
+            <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 20px;">Your Delivery Agent is Here! 🚴‍♂️</h2>
+            <p style="color: #6b7280; margin: 0 0 20px 0; line-height: 1.6;">
+              Great news! Your delivery agent has arrived at the pickup location and is ready to collect your order.
+            </p>
+
+            <!-- OTP Box -->
+            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 30px 20px; text-align: center; margin: 20px 0;">
+              <div style="font-size: 12px; color: #64748b; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">
+                Your Verification Code
+              </div>
+              <div style="font-size: 32px; font-weight: 700; color: #0f172a; letter-spacing: 4px; margin: 10px 0;">${otp}</div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 10px;">
+                ⚡ Valid for 10 minutes
+              </div>
+            </div>
+
+            <!-- Instructions -->
+            <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0;">
+              <p style="color: #92400e; margin: 0; font-size: 14px; font-weight: 500;">
+                📞 <strong>Important:</strong> Please share this 6-digit code with your delivery agent to confirm pickup.
+              </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 30px;">
+              <p style="color: #9ca3af; font-size: 12px; margin: 0; text-align: center; line-height: 1.5;">
+                This is an automated message from Foodly.<br>
+                If you didn't request this pickup, please ignore this email.
+              </p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ OTP email sent successfully to ${email} (attempt ${attempt})`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Email sending failed (attempt ${attempt}/${maxRetries}):`, error.message);
+
+      if (attempt === maxRetries) {
+        console.error('❌ All email retry attempts failed');
+        return false;
+      }
+
+      // Wait before retry (exponential backoff)
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  return false;
 }
 
 
@@ -143,45 +175,40 @@ app.get("/wallet/:userId", async (req, res) => {
 });
 
 // 2. Place Order (Generates OTP immediately)
-// Updated Route in server.js
 app.post("/orders", async (req, res) => {
   try {
     const { totalAmount, placedby } = req.body; // Ensure these are sent from frontend
+
+    // Validate required fields
+    if (!totalAmount || !placedby) {
+      return res.status(400).json({ error: "Missing required fields: totalAmount and placedby" });
+    }
+
+    // Validate amount is positive
+    if (totalAmount <= 0) {
+      return res.status(400).json({ error: "Total amount must be positive" });
+    }
+
     const otp = generateOTP();
     const now = new Date().toISOString();
-    
-    const batch = db.batch();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes from now
 
-    // 1. Create the Order Document
-    const orderRef = db.collection("order").doc(); 
+    // Create the Order Document (wallet deduction happens only after OTP verification)
+    const orderRef = db.collection("order").doc();
     const orderDoc = {
       ...req.body,
       otp: otp,
+      otpExpiry: otpExpiry,
       status: "PLACED",
       createdAt: now,
       updatedAt: now
     };
-    batch.set(orderRef, orderDoc);
 
-    // 2. Deduct from Student Wallet immediately
-    const studentWalletRef = db.collection("wallets").doc(String(placedby));
-    batch.set(studentWalletRef, {
-      balance: admin.firestore.FieldValue.increment(-totalAmount),
-      history: admin.firestore.FieldValue.arrayUnion({
-        type: 'order',
-        amount: totalAmount,
-        orderId: orderRef.id,
-        date: now
-      })
-    }, { merge: true });
-
-    // Execute both actions together
-    await batch.commit();
-
+    await orderRef.set(orderDoc);
     res.status(201).json({ id: orderRef.id, ...orderDoc });
-  } catch (error) { 
+  } catch (error) {
     console.error("Order Placement Error:", error);
-    res.status(500).json({ error: error.message }); 
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -218,17 +245,73 @@ app.patch("/orders/:id/status", async (req, res) => {
     const { status } = req.body;
     const orderRef = db.collection("order").doc(id);
     const doc = await orderRef.get();
-    
+
     if (!doc.exists) return res.status(404).json({ error: "Order not found" });
     const orderData = doc.data();
 
-    if (status === "OUT_FOR_DELIVERY" && orderData.customerEmail) {
-      await sendOTPEmail(orderData.customerEmail, orderData.otp);
-    }
+    // Note: OTP email is now sent when delivery buddy clicks "Mark as Delivered"
 
     await orderRef.update({ status, updatedAt: new Date().toISOString() });
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error("Status Update Error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 3.1. Resend OTP
+app.post("/orders/:id/resend-otp", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const orderRef = db.collection("order").doc(id);
+    const doc = await orderRef.get();
+
+    if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+
+    const orderData = doc.data();
+
+    // Check if order has been picked up by a delivery buddy
+    if (!orderData.pickedby) {
+      return res.status(400).json({ error: "Order must be assigned to a delivery buddy" });
+    }
+
+    if (!orderData.customerEmail) {
+      return res.status(400).json({ error: "Customer email not found for this order" });
+    }
+
+    // Rate limit OTP resend (max 3 per 15 minutes per order)
+    const rateLimitKey = `otp_resend_${id}`;
+    if (!checkRateLimit(rateLimitKey, 3, 15 * 60 * 1000)) {
+      return res.status(429).json({
+        error: "Too many resend requests. Please wait before requesting again."
+      });
+    }
+
+    // Generate new OTP and update expiry
+    const newOtp = generateOTP();
+    const newOtpExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes from now
+
+    // Update order with new OTP
+    await orderRef.update({
+      otp: newOtp,
+      otpExpiry: newOtpExpiry,
+      updatedAt: new Date().toISOString()
+    });
+
+    const emailSent = await sendOTPEmail(orderData.customerEmail, newOtp);
+    if (!emailSent) {
+      return res.status(500).json({ error: "Failed to send OTP email. Please try again." });
+    }
+
+    res.json({
+      success: true,
+      message: "OTP resent successfully",
+      otpExpiry: newOtpExpiry
+    });
+  } catch (e) {
+    console.error("OTP Resend Error:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // 4. VERIFY OTP & TRANSFER MONEY (THE MAIN WALLET LOGIC)
@@ -237,11 +320,32 @@ app.post("/orders/:id/verify-otp", async (req, res) => {
     const { id } = req.params;
     const { otp, buddyId } = req.body;
 
+    // Validate input
+    if (!otp || !buddyId) {
+      return res.status(400).json({ error: "OTP and buddyId are required" });
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: "Invalid OTP format" });
+    }
+
     const orderRef = db.collection("order").doc(id);
     const orderSnap = await orderRef.get();
+
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
     const order = orderSnap.data();
 
-    if (order.otp !== otp) return res.status(400).json({ error: "Invalid OTP" });
+    // Check OTP expiry
+    if (order.otpExpiry && new Date() > new Date(order.otpExpiry)) {
+      return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+    }
+
+    if (order.otp !== otp) {
+      return res.status(400).json({ error: "Invalid OTP" });
+    }
 
     const batch = db.batch();
 

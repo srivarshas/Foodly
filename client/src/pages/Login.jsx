@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Login({ setRole, setUser }) {
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('student');
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export default function Login({ setRole, setUser }) {
 
     // Set the global role and user in App.jsx and move to home
     setRole(selectedRole);
-    setUser({ email, name });
+    setUser({ email, name, phone });
     navigate('/home');
   };
 
@@ -51,9 +52,9 @@ export default function Login({ setRole, setUser }) {
 
         <div>
           <label className="text-xs font-bold text-gray-400 ml-2 uppercase">University Email</label>
-          <input 
-            type="email" 
-            placeholder="125XXXXXX@sastra.ac.in" 
+          <input
+            type="email"
+            placeholder="125XXXXXX@sastra.ac.in"
             className={`w-full mt-1 p-4 rounded-2xl bg-white border ${error ? 'border-red-500' : 'border-transparent'} shadow-sm outline-none focus:ring-2 focus:ring-primary/20`}
             value={email}
             onChange={(e) => {
@@ -63,6 +64,18 @@ export default function Login({ setRole, setUser }) {
             required
           />
           {error && <p className="text-red-500 text-[10px] mt-2 ml-2 font-bold uppercase tracking-wider">{error}</p>}
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-gray-400 ml-2 uppercase">Phone Number</label>
+          <input
+            type="tel"
+            placeholder="+91 98765 43210"
+            className="w-full mt-1 p-4 rounded-2xl bg-white border border-transparent shadow-sm outline-none focus:ring-2 focus:ring-primary/20"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+          />
         </div>
 
         <button className="w-full bg-gray-900 text-white font-bold py-4 rounded-2xl shadow-xl active:scale-95 transition-all">

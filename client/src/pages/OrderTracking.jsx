@@ -152,7 +152,7 @@ export default function OrderTracking({ user }) {
               <div className="bg-gray-900 rounded-[2rem] p-5 text-white flex justify-between items-center shadow-lg">
                 <div>
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Delivery Buddy</p>
-                  <p className="text-lg font-black">{currentSelectedOrder.pickedby || "Searching..."}</p>
+                  <p className="text-lg font-black">{currentSelectedOrder.buddyPhone || "Searching..."}</p>
                 </div>
                 {currentSelectedOrder.pickedby && (
                   <a href={`tel:${currentSelectedOrder.buddyPhone}`} className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30">📞</a>
@@ -174,7 +174,7 @@ export default function OrderTracking({ user }) {
                   ))}
                   <div className="border-t border-dashed border-gray-200 pt-3 mt-3 space-y-2">
                     <div className="flex justify-between text-xs text-gray-400 font-bold uppercase">
-                      <span>Delivery Fee (Escrow)</span>
+                      <span>Delivery Fee</span>
                       <span>₹{currentSelectedOrder.deliveryFee}</span>
                     </div>
                     <div className="flex justify-between text-lg font-black text-gray-900 pt-1">

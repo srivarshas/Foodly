@@ -49,7 +49,8 @@ export default function BuddyTask({ user }) {
   // STEP 1: Handle Normal Status Updates (Pickup & En-Route)
   const handleStepClick = (orderId, stepStatus, deliveryFee, stepId) => {
     if (stepStatus === 'DELIVERED') {
-      // For the final step, open the OTP Modal instead of updating immediately
+      // For the final step, send OTP email and open the verification modal
+      sendOTPEmail(orderId);
       setSelectedOrderId(orderId);
       setShowOtpModal(true);
     } else {
@@ -94,7 +95,10 @@ export default function BuddyTask({ user }) {
       const res = await fetch(`http://localhost:3000/orders/${selectedOrderId}/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otp: otp.trim() })
+        body: JSON.stringify({
+          otp: otp.replace(/\s/g, ''), // Remove any spaces
+          buddyId: user?.name // Use the delivery user's name as buddyId
+        })
       });
 
       const data = await res.json();
@@ -103,7 +107,7 @@ export default function BuddyTask({ user }) {
       // Correct OTP! Now complete the order and trigger payment
       const order = activeOrders.find(o => o.id === selectedOrderId);
       await updateOrderStatus(selectedOrderId, 'DELIVERED', order.deliveryFee);
-      
+
       setShowOtpModal(false);
       setOtp('');
       alert("Verification Successful! Earnings added to wallet.");
@@ -111,6 +115,27 @@ export default function BuddyTask({ user }) {
       setOtpError(e.message);
     } finally {
       setOtpLoading(false);
+    }
+  };
+
+  // Send OTP email when delivery buddy arrives
+  const sendOTPEmail = async (orderId) => {
+    try {
+      const res = await fetch(`http://localhost:3000/orders/${orderId}/resend-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        console.error('Failed to send OTP email:', data?.error);
+        // Continue anyway - the OTP modal will still open
+      } else {
+        console.log('OTP email sent successfully');
+      }
+    } catch (error) {
+      console.error('Error sending OTP email:', error);
+      // Continue anyway - the OTP modal will still open
     }
   };
 
@@ -136,6 +161,19 @@ export default function BuddyTask({ user }) {
             <div className="flex justify-between items-start mb-4">
               <h2 className="text-xl font-black text-gray-800">Order #{order.id}</h2>
               <p className="text-lg font-black text-green-600">₹{order.deliveryFee}</p>
+            </div>
+
+            {/* Customer Contact Info */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Customer Contact</p>
+                  <p className="text-sm font-bold text-gray-800">{order.customerPhone || "Not available"}</p>
+                </div>
+                {order.customerPhone && (
+                  <a href={`tel:${order.customerPhone}`} className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">📞</a>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -193,10 +231,18 @@ export default function BuddyTask({ user }) {
             value={otp[index] || ''}
             onChange={(e) => {
               const value = e.target.value.replace(/\D/g, '');
-              const newOtp = otp.padEnd(6, ' ').split('');
+              if (value === '') {
+                // Handle deletion
+                const newOtp = otp.split('');
+                newOtp[index] = '';
+                setOtp(newOtp.join(''));
+                return;
+              }
+
+              // Handle new digit input
+              const newOtp = otp.split('');
               newOtp[index] = value;
-              const updatedOtp = newOtp.join('').trimEnd();
-              setOtp(updatedOtp);
+              setOtp(newOtp.join(''));
 
               // Auto-focus next box
               if (value && index < 5) {

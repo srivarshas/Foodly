@@ -37,7 +37,8 @@ export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
       deliveryFee: delivery,
       totalAmount: subtotal + delivery,
       placedby: user?.name || null,
-      customerEmail: user?.name || null,
+      customerEmail: user?.email || null,
+      customerPhone: user?.phone || null,
       pickedby: null,
       createdAt: new Date().toISOString(),
     };
