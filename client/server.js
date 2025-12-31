@@ -385,4 +385,48 @@ app.get("/delivery-users/:userId", async (req, res) => {
   res.json(doc.exists ? doc.data() : { totalEarnings: 0, deliveryCount: 0 });
 });
 
+// GET /orders/batches
+app.get("/orders/batches", async (req, res) => {
+  try {
+    const snapshot = await db.collection("order")
+      .where("status", "==", "PLACED")
+      .where("pickedby", "==", null)
+      .get();
+
+    if (snapshot.empty) return res.json([]);
+
+    const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // AI Logic: Group orders by Canteen and Drop Location
+    const batches = orders.reduce((acc, order) => {
+      const key = `${order.canteenName}-${order.dropLocation}`;
+      if (!acc[key]) {
+        acc[key] = {
+          batchId: key,
+          canteenName: order.canteenName,
+          dropLocation: order.dropLocation,
+          orders: [],
+          totalDeliveryFee: 0,
+        };
+      }
+      acc[key].orders.push(order);
+      return acc;
+    }, {});
+
+    // Filter to show only locations that have more than 1 order (Actual Batches)
+    const activeBatches = Object.values(batches).filter(b => b.orders.length > 1);
+
+    // Calculate AI Batch Pricing: (Total combined fees * 0.8) 
+    // This makes it cheaper for users but more profitable for the Buddy
+    activeBatches.forEach(batch => {
+      const combinedFee = batch.orders.reduce((sum, o) => sum + o.deliveryFee, 0);
+      batch.suggestedBuddyEarning = combinedFee * 0.85; // Buddy gets 85% of total
+    });
+
+    res.json(activeBatches);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(3000, () => console.log("Server running on port 3000"));

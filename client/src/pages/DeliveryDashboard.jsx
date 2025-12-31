@@ -5,8 +5,8 @@ export default function DeliveryDashboard({ user }) {
   const navigate = useNavigate();
 
   const [availableOrders, setAvailableOrders] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [activeOrder, setActiveOrder] = useState(null);
-  const [balance, setBalance] = useState(0.00);
   const [deliveryStats, setDeliveryStats] = useState({
     totalEarnings: 0,
     deliveryCount: 0,
@@ -15,29 +15,27 @@ export default function DeliveryDashboard({ user }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // 1. STATS POLLING
+  // 1. CONSOLIDATED POLLING
   useEffect(() => {
-    if (user?.name) {
-      loadDeliveryStats();
-      const statsInterval = setInterval(loadDeliveryStats, 10000);
-      return () => clearInterval(statsInterval);
-    }
-  }, [user?.name]);
+    if (!user?.name) return;
 
-  // 2. ORDER POLLING
-  useEffect(() => {
-    loadOrders();
-    const ordersInterval = setInterval(loadOrders, 5000);
-    return () => clearInterval(ordersInterval);
+    const fetchData = () => {
+      loadDeliveryStats();
+      loadOrders();
+      loadBatches();
+    };
+
+    fetchData(); // Initial load
+    const interval = setInterval(fetchData, 5000); // Poll every 5 seconds
+    
+    return () => clearInterval(interval);
   }, [user?.name]);
 
   const loadDeliveryStats = async () => {
-    if (!user?.name) return;
     try {
       const res = await fetch(`http://localhost:3000/delivery-users/${user.name}`);
       const data = await res.json();
       if (res.ok) {
-        setBalance(data.totalEarnings || 0);
         setDeliveryStats({
           totalEarnings: data.totalEarnings || 0,
           deliveryCount: data.deliveryCount || 0,
@@ -57,13 +55,11 @@ export default function DeliveryDashboard({ user }) {
 
       const orders = Array.isArray(data) ? data : Object.values(data || {});
       
-      // Filter for orders that haven't been picked up yet
       const placedOrders = orders.filter(order =>
         String(order?.status || '').toUpperCase() === 'PLACED' && !order.pickedby
       );
       setAvailableOrders(placedOrders);
 
-      // Identify if this buddy already has an order in progress
       const activeDelivery = orders.find(order =>
         String(order?.pickedby || '').toLowerCase() === user.name.toLowerCase() &&
         ['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(String(order?.status || '').toUpperCase())
@@ -76,38 +72,59 @@ export default function DeliveryDashboard({ user }) {
     }
   };
 
-  const acceptOrder = async (orderId) => {
-    if (!user || !user.name) {
-      alert("Buddy profile not loaded. Please log in again.");
-      return;
+  const loadBatches = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/orders/batches');
+      if (res.ok) {
+        const data = await res.json();
+        setBatches(data);
+      }
+    } catch (e) {
+      console.error('Failed to load batches:', e);
     }
+  };
+
+  // Logic to accept a single gig
+  const acceptOrder = async (orderId) => {
+    if (!user?.name) return alert("Buddy profile not loaded.");
 
     try {
-      // 1. Assign the Buddy to the order
+      // 1. Assign Buddy
       const acceptRes = await fetch(`http://localhost:3000/orders/${orderId}/accept`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          pickedby: user?.name,
-          buddyPhone: user?.phone || "+91 99999 88888" // Attach buddy's phone for the student
+          pickedby: user.name,
+          buddyPhone: user.phone || "+91 99999 88888" 
         })
       });
-
       if (!acceptRes.ok) throw new Error('Could not secure order');
 
-      // 2. Set initial status
-      const statusRes = await fetch(`http://localhost:3000/orders/${orderId}/status`, {
+      // 2. Set Status
+      await fetch(`http://localhost:3000/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'PICKED_UP' })
       });
 
-      if (!statusRes.ok) throw new Error('Status update failed');
-
-      // 3. Navigate to the task management page
       navigate('/tasks'); 
     } catch (e) {
       alert(e.message);
+    }
+  };
+
+  // Logic to accept multiple orders at once (AI Batching)
+  const acceptBatch = async (batchOrders) => {
+    try {
+      setLoading(true);
+      // Process all orders in the batch simultaneously
+      const promises = batchOrders.map(order => acceptOrder(order.id));
+      await Promise.all(promises);
+      navigate('/tasks');
+    } catch (e) {
+      alert("Batch acceptance failed: " + e.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -127,29 +144,53 @@ export default function DeliveryDashboard({ user }) {
       </div>
 
       {/* Buddy Earnings Card */}
-<div className="bg-primary rounded-[2.5rem] p-6 text-white shadow-xl shadow-primary/20 mb-8">
-  <div className="flex justify-between items-start mb-4">
-    <div>
-      <p className="text-[10px] font-black uppercase opacity-80 tracking-widest">Total Earnings</p>
-      <h2 className="text-4xl font-black">₹{deliveryStats.totalEarnings}</h2>
-    </div>
-    <div className="bg-black/20 p-3 rounded-2xl text-center min-w-[60px]">
-      <p className="text-[18px] font-black">{deliveryStats.rating}</p>
-      <p className="text-[8px] font-bold uppercase opacity-60">Rating</p>
-    </div>
-  </div>
-  
-  <div className="grid grid-cols-2 gap-3 mt-6">
-    <div className="bg-white/10 rounded-2xl p-3">
-      <p className="text-[8px] font-bold uppercase opacity-60 mb-1">Deliveries</p>
-      <p className="font-black">{deliveryStats.deliveryCount}</p>
-    </div>
-    <div className="bg-white/10 rounded-2xl p-3">
-      <p className="text-[8px] font-bold uppercase opacity-60 mb-1">Status</p>
-      <p className="font-black text-green-300">Active</p>
-    </div>
-  </div>
-</div>
+      <div className="bg-primary rounded-[2.5rem] p-6 text-white shadow-xl shadow-primary/20 mb-8">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <p className="text-[10px] font-black uppercase opacity-80 tracking-widest">Total Earnings</p>
+            <h2 className="text-4xl font-black">₹{deliveryStats.totalEarnings}</h2>
+          </div>
+          <div className="bg-black/20 p-3 rounded-2xl text-center min-w-[60px]">
+            <p className="text-[18px] font-black">{deliveryStats.rating}</p>
+            <p className="text-[8px] font-bold uppercase opacity-60">Rating</p>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3 mt-6">
+          <div className="bg-white/10 rounded-2xl p-3">
+            <p className="text-[8px] font-bold uppercase opacity-60 mb-1">Deliveries</p>
+            <p className="font-black">{deliveryStats.deliveryCount}</p>
+          </div>
+          <div className="bg-white/10 rounded-2xl p-3">
+            <p className="text-[8px] font-bold uppercase opacity-60 mb-1">Status</p>
+            <p className="font-black text-green-300">Active</p>
+          </div>
+        </div>
+      </div>
+
+      {/* AI RECOMMENDED BATCHES */}
+      {batches.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-primary font-black italic mb-3 flex items-center gap-2">
+            <span className="animate-pulse">✨</span> AI RECOMMENDED BATCHES
+          </h3>
+          {batches.map(batch => (
+            <div key={batch.batchId} className="bg-primary/5 border-2 border-primary/20 p-5 rounded-[2.5rem] mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <p className="font-black text-gray-800">{batch.orders.length} Orders to {batch.dropLocation}</p>
+                <p className="text-primary font-black text-lg">Earn ₹{batch.suggestedBuddyEarning}</p>
+              </div>
+              <p className="text-[10px] text-gray-500 mb-4 uppercase font-bold italic">High Efficiency Corridor: {batch.canteenName}</p>
+              <button 
+                onClick={() => acceptBatch(batch.orders)}
+                className="w-full bg-primary text-white py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/30 active:scale-95 transition-transform"
+              >
+                Accept Batch
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Active Order Banner */}
       {activeOrder ? (
@@ -170,9 +211,9 @@ export default function DeliveryDashboard({ user }) {
       {/* Available Orders List */}
       <h2 className="font-black text-xl mb-4 text-gray-800 px-2 italic">Open Gigs</h2>
       {loading ? (
-        <div className="text-center py-10 animate-bounce">🍕</div>
+        <div className="text-center py-10 animate-bounce text-2xl">🍕</div>
       ) : availableOrders.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm italic">No orders currently waiting. Check back in a bit!</div>
+        <div className="text-center py-10 text-gray-400 text-sm italic">No individual orders waiting.</div>
       ) : (
         <div className="space-y-4">
           {availableOrders.map((order) => (
@@ -184,9 +225,26 @@ export default function DeliveryDashboard({ user }) {
                 <p className="text-lg font-black text-gray-900">₹{order.deliveryFee}</p>
               </div>
               
-              <div className="space-y-1 mb-6">
+              <div className="space-y-1 mb-4">
                 <h4 className="font-black text-gray-800">Drop: {order.dropLocation}</h4>
                 <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Student: {order.placedby}</p>
+              </div>
+
+              {/* Items Preview */}
+              <div className="mb-6 bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Order Items</p>
+                <div className="space-y-1">
+                  {order.items?.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center">
+                      <p className="text-xs font-bold text-gray-700">
+                        <span className="text-primary mr-1">
+                          {item.quantity || item.qty || 1}x
+                        </span> 
+                        {item.itemName || item.name || "Item"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <button

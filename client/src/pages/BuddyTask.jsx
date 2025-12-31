@@ -173,6 +173,30 @@ export default function BuddyTask({ user }) {
                 {order.customerPhone && (
                   <a href={`tel:${order.customerPhone}`} className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">📞</a>
                 )}
+
+{/* Items Checklist for Buddy */}
+<div className="bg-gray-50 rounded-[2rem] p-5 mb-4 border border-gray-100">
+  <div className="flex justify-between items-center mb-3">
+    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pickup Checklist</p>
+  </div>
+  <div className="space-y-2">
+    {order.items?.map((item, idx) => (
+      <div key={idx} className="flex items-center gap-3">
+        <input 
+          type="checkbox" 
+          className="w-4 h-4 rounded border-gray-300 text-primary" 
+        />
+        <p className="text-sm font-bold text-gray-700">
+          <span className="text-primary">
+            {item.quantity || item.qty || 1}x
+          </span> 
+          {item.itemName || item.name || "Item"}
+        </p>
+      </div>
+    ))}
+  </div>
+</div>
+
               </div>
             </div>
 
