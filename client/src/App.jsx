@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Landing from './pages/Landing';
 import BuddyStats from './pages/Stats';
 import BuddyTask from './pages/BuddyTask';
+import AIAssistant from './pages/AIAssistant';
 
 function App() {
   const [role, setRole] = useState('student');
@@ -102,6 +103,13 @@ function App() {
                 <>
                   <BuddyTask user={user} />
                   <MobileNav role={role} />
+                </>
+              } />
+
+              <Route path="/ai-assistant" element={
+                <>
+                  <AIAssistant user={user} addToCart={addToCart} />
+                  <MobileNav role={role} cartCount={cart.length} />
                 </>
               } />
             </Routes>
