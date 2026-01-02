@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '../utils/api';
+
 import { useState } from 'react';
 import { calculateDelivery } from '../utils/deliveryCharges';
 
@@ -46,7 +48,7 @@ export default function Cart({ cart, setCart, selectedCanteen, user, role }) {
     console.log("[CONFIRM ORDER] Order details:", orderDetails);
 
     // Persist to backend (Firestore via firebase-admin)
-    fetch("http://localhost:3000/orders", {
+    fetch(`${API_BASE_URL}/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(orderDetails),

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../utils/api';
 import { useState, useEffect } from 'react'; // <--- Added useState here
 import { useNavigate } from 'react-router-dom';
 import { canteens } from '../data/canteens';
@@ -17,7 +18,7 @@ export default function StudentDashboard({ user }) {
 
   useEffect(() => {
     if (user?.name) {
-      fetch(`http://localhost:3000/wallet/${user.name}`)
+      fetch(`${API_BASE_URL}/wallet/${user.name}`)
         .then(res => res.json())
         .then(data => setWallet(data))
         .catch(err => console.error("Wallet fetch error:", err));

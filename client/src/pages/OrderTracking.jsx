@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '../utils/api';
+
 import { useEffect, useMemo, useState } from 'react';
 import OrderCard from '../components/OrderCard';
 
@@ -13,7 +15,7 @@ export default function OrderTracking({ user }) {
   useEffect(() => {
     async function loadOrders() {
       try {
-        const res = await fetch('http://localhost:3000/orders');
+        const res = await fetch(`${API_BASE_URL}/orders`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || 'Failed to sync');
         

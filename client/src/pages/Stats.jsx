@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../utils/api';
 import { useState, useEffect } from 'react';
 
 export default function BuddyStats({ user }) {
@@ -22,7 +23,7 @@ export default function BuddyStats({ user }) {
 
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:3000/delivery-users/${user.name}`);
+      const res = await fetch(`${API_BASE_URL}/delivery-users/${user.name}`);
       const data = await res.json();
 
       if (res.ok) {
@@ -54,24 +55,30 @@ export default function BuddyStats({ user }) {
   const calculateWeeklyEarnings = (deliveries) => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    // Group deliveries by day of week
-    const dailyEarnings = [0, 0, 0, 0, 0, 0, 0]; // Mon to Sun
+    const dailyEarnings = [0, 0, 0, 0, 0, 0, 0];
 
     deliveries.forEach(delivery => {
-      if (delivery.timestamp) {
-        const deliveryDate = new Date(delivery.timestamp);
+      // Check for timestamp or createdAt (common in Firebase)
+      const dateSource = delivery.timestamp || delivery.createdAt;
+      if (dateSource) {
+        const deliveryDate = new Date(dateSource);
         if (deliveryDate >= weekAgo) {
-          const dayOfWeek = deliveryDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
-          // Convert to Monday-first (0 = Monday, 6 = Sunday)
+          const dayOfWeek = deliveryDate.getDay(); 
           const mondayFirstIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-          dailyEarnings[mondayFirstIndex] += delivery.amount;
+          
+          // Use whatever field name you actually use in your DB (amount/deliveryFee/price)
+          const amount = delivery.amount || delivery.deliveryFee || 0;
+          dailyEarnings[mondayFirstIndex] += amount;
         }
       }
     });
 
-    // Convert to percentages for chart (max height = 100%)
-    const maxEarning = Math.max(...dailyEarnings, 1);
+    const maxEarning = Math.max(...dailyEarnings);
+    
+    // If no earnings yet, return 0s so the chart doesn't crash
+    if (maxEarning === 0) return [0, 0, 0, 0, 0, 0, 0];
+
+    // Return percentages
     return dailyEarnings.map(amount => (amount / maxEarning) * 100);
   };
 
@@ -96,8 +103,12 @@ export default function BuddyStats({ user }) {
           {stats.weeklyEarnings.map((height, i) => (
             <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
               <div
-                className={`w-full max-w-[20px] rounded-t-lg transition-all duration-500 bg-primary`}
-                style={{ height: `${height}%`, minHeight: height > 0 ? '4px' : '0px' }}
+                className="w-full max-w-[20px] rounded-t-lg transition-all duration-1000 ease-out"
+                style={{ 
+                  height: `${height}%`, 
+                  backgroundColor: height > 0 ? '#FF4D00' : '#F3F4F6', // Orange if data exists, gray if 0
+                  minHeight: height > 0 ? '10px' : '2px' // Ensures even small earnings are visible
+                }}
               ></div>
               <span className="text-[10px] font-bold text-gray-400">
                 {['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}

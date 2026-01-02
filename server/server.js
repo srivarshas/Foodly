@@ -7,11 +7,21 @@ const nodemailer = require("nodemailer");
 const app = express();
 app.use(express.json());
 
+const cors = require('cors');
+app.use(cors()); // For the hackathon, this is the safest way to ensure no connection blocks.
+
 if (!admin.apps.length) {
     admin.initializeApp({
         credential: admin.credential.applicationDefault(), // or your service account
     });
 }
+
+// 2. DYNAMIC PORT (Render will inject the port via environment variables)
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server is flying on port ${PORT}`);
+});
 
 // Basic CORS
 app.use((req, res, next) => {
@@ -374,17 +384,6 @@ app.post("/orders/:id/verify-otp", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 5. Standard Get Routes
-app.get("/orders", async (req, res) => {
-  const snapshot = await db.collection("order").get();
-  res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-});
-
-app.get("/delivery-users/:userId", async (req, res) => {
-  const doc = await db.collection("deliveryUsers").doc(req.params.userId).get();
-  res.json(doc.exists ? doc.data() : { totalEarnings: 0, deliveryCount: 0 });
-});
-
 // GET /orders/batches
 app.get("/orders/batches", async (req, res) => {
   try {
@@ -429,4 +428,15 @@ app.get("/orders/batches", async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+// 5. Standard Get Routes
+app.get("/orders", async (req, res) => {
+  const snapshot = await db.collection("order").get();
+  res.json(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+});
+
+app.get("/delivery-users/:userId", async (req, res) => {
+  const doc = await db.collection("deliveryUsers").doc(req.params.userId).get();
+  res.json(doc.exists ? doc.data() : { totalEarnings: 0, deliveryCount: 0 });
+});
+
+

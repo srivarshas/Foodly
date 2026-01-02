@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '../utils/api';
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -33,7 +35,7 @@ export default function DeliveryDashboard({ user }) {
 
   const loadDeliveryStats = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/delivery-users/${user.name}`);
+      const res = await fetch(`${API_BASE_URL}/delivery-users/${user.name}`);
       const data = await res.json();
       if (res.ok) {
         setDeliveryStats({
@@ -49,7 +51,7 @@ export default function DeliveryDashboard({ user }) {
 
   const loadOrders = async () => {
     try {
-      const res = await fetch('http://localhost:3000/orders');
+      const res = await fetch(`${API_BASE_URL}/orders`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load orders');
 
@@ -74,7 +76,7 @@ export default function DeliveryDashboard({ user }) {
 
   const loadBatches = async () => {
     try {
-      const res = await fetch('http://localhost:3000/orders/batches');
+      const res = await fetch(`${API_BASE_URL}/orders/batches`);
       if (res.ok) {
         const data = await res.json();
         setBatches(data);
@@ -90,7 +92,7 @@ export default function DeliveryDashboard({ user }) {
 
     try {
       // 1. Assign Buddy
-      const acceptRes = await fetch(`http://localhost:3000/orders/${orderId}/accept`, {
+      const acceptRes = await fetch(`${API_BASE_URL}/orders/${orderId}/accept`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -101,13 +103,12 @@ export default function DeliveryDashboard({ user }) {
       if (!acceptRes.ok) throw new Error('Could not secure order');
 
       // 2. Set Status
-      await fetch(`http://localhost:3000/orders/${orderId}/status`, {
+      await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'PICKED_UP' })
       });
 
-      navigate('/tasks'); 
     } catch (e) {
       alert(e.message);
     }
@@ -116,17 +117,15 @@ export default function DeliveryDashboard({ user }) {
   // Logic to accept multiple orders at once (AI Batching)
   const acceptBatch = async (batchOrders) => {
     try {
-      setLoading(true);
-      // Process all orders in the batch simultaneously
-      const promises = batchOrders.map(order => acceptOrder(order.id));
-      await Promise.all(promises);
-      navigate('/tasks');
-    } catch (e) {
-      alert("Batch acceptance failed: " + e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setLoading(true);
+    await Promise.all(batchOrders.map(order => acceptOrder(order.id)));
+    navigate('/tasks'); // Navigates once after all are accepted
+  } catch (e) {
+    alert("Batch acceptance failed: " + e.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleLogout = () => {
     if (window.confirm("Do you want to logout?")) navigate('/');

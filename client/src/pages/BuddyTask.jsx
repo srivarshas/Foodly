@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+import { API_BASE_URL } from '../utils/api';
+
 export default function BuddyTask({ user }) {
   const [activeOrders, setActiveOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ export default function BuddyTask({ user }) {
   const loadActiveOrders = async () => {
     if (!user?.name) return;
     try {
-      const res = await fetch('http://localhost:3000/orders');
+      const res = await fetch(`${API_BASE_URL}/orders`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load orders');
       const orders = Array.isArray(data) ? data : Object.values(data || {});
@@ -60,7 +62,7 @@ export default function BuddyTask({ user }) {
 
   const updateOrderStatus = async (orderId, newStatus, deliveryFee) => {
     try {
-      const res = await fetch(`http://localhost:3000/orders/${orderId}/status`, {
+      const res = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -70,7 +72,7 @@ export default function BuddyTask({ user }) {
 
       // OPTION A: Release Payments only if status is DELIVERED
       if (newStatus === 'DELIVERED') {
-        const earnRes = await fetch(`http://localhost:3000/delivery-users/${user.name}/earn`, {
+        const earnRes = await fetch(`${API_BASE_URL}/delivery-users/${user.name}/earn`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -92,7 +94,7 @@ export default function BuddyTask({ user }) {
     setOtpLoading(true);
     setOtpError('');
     try {
-      const res = await fetch(`http://localhost:3000/orders/${selectedOrderId}/verify-otp`, {
+      const res = await fetch(`${API_BASE_URL}/orders/${selectedOrderId}/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -121,7 +123,7 @@ export default function BuddyTask({ user }) {
   // Send OTP email when delivery buddy arrives
   const sendOTPEmail = async (orderId) => {
     try {
-      const res = await fetch(`http://localhost:3000/orders/${orderId}/resend-otp`, {
+      const res = await fetch(`${API_BASE_URL}/orders/${orderId}/resend-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
