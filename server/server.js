@@ -23,6 +23,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server is flying on port ${PORT}`);
 });
 
+/*
 // Basic CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -31,6 +32,8 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+*/
+
 
 // --- HELPERS ---
 

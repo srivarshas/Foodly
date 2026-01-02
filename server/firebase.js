@@ -1,13 +1,27 @@
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
 
-// Initialize Firebase Admin
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+if (!admin.apps.length) {
+  let serviceAccount;
 
-// Get Firestore instance
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // RENDER CASE: Parse the string from your Environment Variables
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    // LOCAL CASE: Use your local file if it exists
+    try {
+      serviceAccount = require("./serviceAccountKey.json");
+    } catch (e) {
+      console.error("Missing FIREBASE_SERVICE_ACCOUNT env or serviceAccountKey.json file");
+    }
+  }
+
+  if (serviceAccount) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+  }
+}
+
+// Just do this once
 const db = admin.firestore();
-
-// Export Firestore so other files can use it
 module.exports = db;
