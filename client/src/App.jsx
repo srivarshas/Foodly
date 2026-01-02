@@ -40,51 +40,42 @@ function App() {
   };
 
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-100 flex justify-center">
-        <div className="w-full max-w-md bg-white min-h-screen shadow-2xl flex flex-col">
-          
-          <div className="flex-1 pb-24">
-            <Routes>
+    <div className="min-h-screen bg-gray-200 w-full overflow-x-hidden">
+    
+    {/* The Phone Frame - mx-auto is the key here */}
+    <div className="mx-auto w-full max-w-md bg-white min-h-screen shadow-2xl relative flex flex-col">
+      
+      <Router>
+        {/* Force internal content to match parent width */}
+        <div className="w-full flex-1 pb-24">
+          <Routes>
               {/* No Nav on these pages */}
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login setRole={setRole} setUser={setUser} />} />
 
-              {/* Home Page */}
+              {/* ... All your other routes remain exactly the same ... */}
               <Route path="/home" element={
                 <>
                   {role === 'student' ? <StudentDashboard user={user} /> : <DeliveryDashboard user={user} />}
                   <MobileNav role={role} cartCount={cart.length} />
                 </>
               } />
-
-              {/* Menu Page - Using the robust addToCart logic */}
+              
+              {/* Note: I'm omitting the other routes for brevity, keep yours as they were */}
               <Route path="/menu/:id" element={
                 <>
-                  <Menu 
-                    addToCart={addToCart} 
-                    cart={cart} 
-                    setSelectedCanteen={setSelectedCanteen} 
-                  />
+                  <Menu addToCart={addToCart} cart={cart} setSelectedCanteen={setSelectedCanteen} />
                   <MobileNav role={role} cartCount={cart.length} />
                 </>
               } />
 
-              {/* Cart Page */}
               <Route path="/cart" element={
                 <>
-                  <Cart 
-                    cart={cart} 
-                    setCart={setCart} 
-                    selectedCanteen={selectedCanteen} 
-                    user={user} 
-                    role={role} 
-                  />
+                  <Cart cart={cart} setCart={setCart} selectedCanteen={selectedCanteen} user={user} role={role} />
                   <MobileNav role={role} cartCount={cart.length} />
                 </>
               } />
 
-              {/* Other Pages */}
               <Route path="/track" element={
                 <>
                   <OrderTracking user={user} role={role} />
@@ -105,7 +96,7 @@ function App() {
                   <MobileNav role={role} />
                 </>
               } />
-
+              
               <Route path="/ai-assistant" element={
                 <>
                   <AIAssistant user={user} addToCart={addToCart} />
@@ -114,9 +105,9 @@ function App() {
               } />
             </Routes>
           </div>
-        </div>
+        </Router>
       </div>
-    </Router>
+    </div>
   );
 }
 

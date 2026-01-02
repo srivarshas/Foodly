@@ -180,3 +180,14 @@ button:active {
 .animate-scale-in {
   animation: scale-in 0.3s ease-out;
 }
+
+/* index.css */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #e5e7eb; /* Same as gray-200 */
+}
+
+#root {
+  width: 100%;
+}

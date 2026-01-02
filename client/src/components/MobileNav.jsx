@@ -6,7 +6,7 @@ export default function MobileNav({ role, cartCount }) {
   const isActive = (path) => location.pathname === path;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 glass-nav glass-morphism border-t border-gray-100 px-6 py-3 pb-8 flex justify-between items-center z-50">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-gray-100 px-6 py-3 flex justify-between items-center z-50">
       <Link to="/home" className={`flex flex-col items-center gap-1 ${isActive('/home') ? 'text-primary' : 'text-gray-400'}`}>
         <span className="text-2xl">🏠</span>
         <span className="text-[10px] font-bold uppercase tracking-wider">Home</span>

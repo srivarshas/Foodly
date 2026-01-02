@@ -138,7 +138,7 @@ export default function StudentDashboard({ user }) {
       </section>
 
       {/* AI Chat Bubble */}
-      <div className="fixed bottom-20 right-4 z-50">
+      <div className="fixed bottom-20 right-7rem z-50">
         <button
           onClick={() => navigate('/ai-assistant')}
           className="w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group"
